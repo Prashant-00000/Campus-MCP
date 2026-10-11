@@ -1,0 +1,30 @@
+{
+  "model_a": {
+    "model": "model-a-simulator",
+    "split": "test",
+    "total_runs": 63,
+    "tool_selection_accuracy": 76.2,
+    "tool_selection_ci": "76.2% [64.36%, 85.01%]",
+    "argument_accuracy": 76.2,
+    "argument_ci": "76.2% [64.36%, 85.01%]",
+    "task_success_rate": 71.4,
+    "task_success_ci": "71.4% [59.3%, 81.1%]",
+    "avg_steps": 1.71,
+    "avg_latency_ms": 4.03,
+    "csv_path": "C:\\Users\\prash\\Desktop\\MCP\\results\\baseline_model_a_test.csv"
+  },
+  "model_b": {
+    "model": "model-b-simulator",
+    "split": "test",
+    "total_runs": 63,
+    "tool_selection_accuracy": 76.2,
+    "tool_selection_ci": "76.2% [64.36%, 85.01%]",
+    "argument_accuracy": 76.2,
+    "argument_ci": "76.2% [64.36%, 85.01%]",
+    "task_success_rate": 71.4,
+    "task_success_ci": "71.4% [59.3%, 81.1%]",
+    "avg_steps": 1.71,
+    "avg_latency_ms": 4.3,
+    "csv_path": "C:\\Users\\prash\\Desktop\\MCP\\results\\baseline_model_b_test.csv"
+  }
+}
