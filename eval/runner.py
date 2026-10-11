@@ -79,8 +79,14 @@ class EvalHarness:
         expected_tools = case.get("expected_tools", [])
         expected_args = case.get("expected_args", {})
         required_facts = case.get("required_facts", [])
-        is_impossible = case.get("impossible", False)
-        answer = agent_result.final_answer.lower()
+        raw_ans = agent_result.final_answer.lower()
+        answer = (
+            raw_ans.replace("\u2011", "-")
+            .replace("\u2013", "-")
+            .replace("\u2014", "-")
+            .replace("\u202f", " ")
+            .replace("\xa0", " ")
+        )
 
         # 1. Tool Selection Accuracy
         if not expected_tools:

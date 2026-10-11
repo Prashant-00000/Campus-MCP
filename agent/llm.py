@@ -95,13 +95,13 @@ _PROVIDER_ENV_VARS: Dict[str, str] = {
     "ollama": "",  # no key required
 }
 
-# Recommended model pairs (one small/fast, one larger) — current as of Oct 2026
-# Groq free tier: llama-3.1-8b-instant  (small),  llama-3.3-70b-versatile (large)
-# OpenRouter free: google/gemma-2-9b-it (small),  meta-llama/llama-3.1-70b-instruct (large)
+# Recommended model pairs (one small/fast, one larger) — verified active endpoints
+# Groq: openai/gpt-oss-20b (small), openai/gpt-oss-120b (large)
+# OpenRouter free: google/gemma-2-9b-it:free (small), meta-llama/llama-3.1-70b-instruct:free (large)
 RECOMMENDED_MODELS = {
     "groq": {
-        "small": "llama-3.1-8b-instant",
-        "large": "llama-3.3-70b-versatile",
+        "small": "openai/gpt-oss-20b",
+        "large": "openai/gpt-oss-120b",
     },
     "openrouter": {
         "small": "google/gemma-2-9b-it:free",
@@ -343,6 +343,13 @@ class LLMProvider:
             except Exception as exc:
                 last_exc = exc
                 wait = 2 ** attempt
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+                    retry_after = exc.response.headers.get("retry-after")
+                    if retry_after and retry_after.isdigit():
+                        wait = max(int(retry_after) + 1, wait)
+                    else:
+                        wait = max(5 * (attempt + 1), wait)
+
                 log.warning(
                     "LLM call attempt %d/%d failed (%s). Retrying in %ds…",
                     attempt + 1,
