@@ -13,7 +13,10 @@ from agent.client import MCPClientManager
 from agent.audit_logger import AuditLogger, check_contamination_guard
 from agent.defenses import DefenseConfig
 from agent.react_agent import ReActAgent
-from tests.fakes import SimulatorLLMProvider
+try:
+    from tests.fakes import SimulatorLLMProvider
+except ImportError:
+    from fakes import SimulatorLLMProvider
 
 
 @pytest.fixture(scope="module", autouse=True)

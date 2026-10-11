@@ -14,7 +14,14 @@ import csv
 import time
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from tabulate import tabulate
+try:
+    from tabulate import tabulate
+except ImportError:
+    def tabulate(data, headers="firstrow", tablefmt="github"):
+        rows = list(data)
+        if not rows:
+            return ""
+        return "\n".join([" | ".join(str(c) for c in r) for r in rows])
 
 from agent.llm import LLMProvider
 from agent.react_agent import ReActAgent

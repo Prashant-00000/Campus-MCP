@@ -16,7 +16,14 @@ import json
 import csv
 import time
 from typing import List, Dict, Any, Optional, Tuple
-from tabulate import tabulate
+try:
+    from tabulate import tabulate
+except ImportError:
+    def tabulate(data, headers="firstrow", tablefmt="github"):
+        rows = list(data)
+        if not rows:
+            return ""
+        return "\n".join([" | ".join(str(c) for c in r) for r in rows])
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

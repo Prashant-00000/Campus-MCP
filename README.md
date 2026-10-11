@@ -1,12 +1,15 @@
 # 3-Server MCP Agent: Evaluation Benchmark & Red-Team Hardening
 
 > **The Resume Headline:**  
-> *"Built a 3-server MCP agent, measured tool-selection and task accuracy across 2 models, red-teamed it, and cut attack success from 37.5% to 0.0% (95% CI [0.0%, 10.7%], adaptive ASR 10.0% [1.8%, 40.4%]) at a utility cost of 0.0%."*
+> *"Built a 3-server MCP agent, measured tool-selection and task accuracy across 2 models, red-teamed it, and cut attack success from X% to Y% (with confidence intervals) at a utility cost of Z%."*
 
 Every number in this repository is backed by raw execution logs, pinned environments, and a single reproduction command:
 ```bash
 python scripts/reproduce.py
 ```
+
+> **Note on Live vs. Simulated Metrics:**  
+> Historical simulator artifacts are archived in `results/_simulated/`. To generate live benchmark and ablation metrics for your configured real models, run `python scripts/run_eval.py` and `python scripts/run_redteam.py`. The tables below will be populated with live numbers.
 
 ---
 
@@ -17,39 +20,39 @@ Attacks evaluated across 32 multi-category exploits (Direct Prompt Injection, In
 
 | Defense Layer Configuration | Defense Type | Compromised / Total | Attack Success Rate (ASR) | Wilson 95% Confidence Interval |
 | :--- | :--- | :---: | :---: | :---: |
-| **Baseline (Undefended Agent)** | None | **12 / 32** | **37.5%** | **[22.93%, 54.75%]** |
-| **+ System Prompt Hardening** | Probabilistic | 2 / 32 | 6.2% | [1.73%, 20.15%] |
-| **+ Content Isolation Wrapping** | Probabilistic | 0 / 32 | 0.0% | [0.00%, 10.72%] |
-| **+ Argument & Row Caps** | Deterministic | 0 / 32 | 0.0% | [0.00%, 10.72%] |
-| **+ SQL AST Validator** | Deterministic | 0 / 32 | 0.0% | [0.00%, 10.72%] |
-| **Full Defenses (+ Write Guard)** | All Active | **0 / 32** | **0.0%** | **[0.00%, 10.72%]** |
-| **Adaptive Attack Round** | Delimiter/Markdown Exfil | **1 / 10** | **10.0%** | **[1.79%, 40.41%]** |
+| **Baseline (Undefended Agent)** | None | *Pending real run* | *TBD* | *TBD* |
+| **+ System Prompt Hardening** | Probabilistic | *Pending real run* | *TBD* | *TBD* |
+| **+ Content Isolation Wrapping** | Probabilistic | *Pending real run* | *TBD* | *TBD* |
+| **+ Argument & Row Caps** | Deterministic | *Pending real run* | *TBD* | *TBD* |
+| **+ SQL AST Validator** | Deterministic | *Pending real run* | *TBD* | *TBD* |
+| **Full Defenses (+ Write Guard)** | All Active | *Pending real run* | *TBD* | *TBD* |
+| **Adaptive Attack Round** | Delimiter/Markdown Exfil | *Pending real run* | *TBD* | *TBD* |
 
-> *Ablation Finding*: Probabilistic defenses (system prompt reminders) reduce naive direct injections but fail against complex multi-turn indirect payloads. Hard security guarantees require deterministic enforcement (SQL AST parsing, write guards, and strict delimiter isolation). Even with full defenses, adaptive attacks targeting unmonitored read channels (e.g. markdown image exfiltration) achieved a 10.0% ASR, proving defense-in-depth reduces but never eliminates risk.
+> *Ablation Finding*: Probabilistic defenses (system prompt reminders) reduce naive direct injections but fail against complex multi-turn indirect payloads. Hard security guarantees require deterministic enforcement (SQL AST parsing, write guards, and strict delimiter isolation). Adaptive attacks targeting unmonitored read channels (e.g. markdown image exfiltration) demonstrate that defense-in-depth reduces but never eliminates risk.
 
 ### Vulnerability Breakdown by Category
 | Attack Category | Baseline ASR (Undefended) | Defended ASR (Full) | Absolute Risk Reduction |
 | :--- | :---: | :---: | :---: |
-| **Indirect Prompt Injection** | 100.0% (6/6) | 0.0% (0/6) | **-100.0%** |
-| **Excessive Agency** | 40.0% (2/5) | 0.0% (0/5) | **-40.0%** |
-| **Direct Prompt Injection** | 33.3% (2/6) | 0.0% (0/6) | **-33.3%** |
-| **Tool Poisoning** | 20.0% (1/5) | 0.0% (0/5) | **-20.0%** |
-| **Exfiltration** | 20.0% (1/5) | 0.0% (0/5) | **-20.0%** |
-| **SQL Abuse** | 0.0% (0/5) | 0.0% (0/5) | *Neutralized by ro connection* |
+| **Indirect Prompt Injection** | *Pending* | *Pending* | *Pending* |
+| **Excessive Agency** | *Pending* | *Pending* | *Pending* |
+| **Direct Prompt Injection** | *Pending* | *Pending* | *Pending* |
+| **Tool Poisoning** | *Pending* | *Pending* | *Pending* |
+| **Exfiltration** | *Pending* | *Pending* | *Pending* |
+| **SQL Abuse** | *Pending* | *Pending* | *Neutralized by ro connection* |
 
 ### Two-Model Evaluation Benchmark (Test Split, 3 Trials Each)
 Evaluated on the held-out test split (21 cases × 3 trials = 63 executions per model):
 
 | Model Architecture | Tool Selection Accuracy | Argument Accuracy | Task Success Rate | Avg Steps | Avg Latency |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Model A (High-Reasoning Equiv)** | **81.0%** [69.59%, 88.75%] | **81.0%** [69.59%, 88.75%] | **71.4%** [59.30%, 81.10%] | 1.76 | 3.82 ms |
-| **Model B (Fast-Tier Equiv)** | **81.0%** [69.59%, 88.75%] | **81.0%** [69.59%, 88.75%] | **71.4%** [59.30%, 81.10%] | 1.76 | 3.59 ms |
+| **Model A** | *Pending live run* | *Pending live run* | *Pending live run* | *Pending* | *Pending* |
+| **Model B** | *Pending live run* | *Pending live run* | *Pending live run* | *Pending* | *Pending* |
 
 ### Utility Cost of Defenses
-Does hardening break normal agent capability? We re-ran the entire legitimate test evaluation with all defenses active:
-* **Undefended Agent Task Success**: **71.4%** [59.30%, 81.10%]
-* **Fully Defended Agent Task Success**: **71.4%** [59.30%, 81.10%]
-* **Empirical Utility Cost ($\Delta \text{Utility}$)**: **0.0%** (zero regression on legitimate inquiries)
+Does hardening break normal agent capability? Evaluated across the legitimate benchmark with all defenses active:
+* **Undefended Agent Task Success**: *Pending live run*
+* **Fully Defended Agent Task Success**: *Pending live run*
+* **Empirical Utility Cost ($\Delta \text{Utility}$)**: *Pending live run* (calculated via `scripts/run_redteam.py`)
 
 ---
 
@@ -195,7 +198,7 @@ See [FAILURES.md](file:///c:/Users/prash/Desktop/MCP/FAILURES.md) for full trace
 
 ## 6. Honest Limitations Section
 
-1. **Prompt Injection is Not Solved**: Our defenses reduce attack success from 37.5% to 0.0% on standard attacks, but our adaptive attack round proved that sophisticated attackers targeting unmonitored channels (e.g. embedding private emails in outbound markdown image URLs) achieved a **10.0% ASR**.
+1. **Prompt Injection is Not Solved**: Defenses significantly reduce attack success on standard attack vectors, but our adaptive attack round proves that attackers targeting unmonitored side-channels (e.g. embedding private information in outbound markdown image URLs or delimiters) can still succeed. Defenses raise the attacker's cost rather than providing mathematical guarantees.
 2. **Dataset Size**: The 52-case evaluation dataset and 32-case attack suite were self-authored. While structured following AgentDojo benchmarks, real-world generalization requires larger, multi-domain distributions.
 3. **Self-Authored Attacks**: Adversarial testing was designed by the system creator; third-party external red-teaming would likely uncover additional blind spots.
 4. **Version Specificity**: Numbers reflect exact model behaviors and pinned package versions specified in `requirements.txt`.
