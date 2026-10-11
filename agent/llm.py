@@ -209,7 +209,17 @@ class LLMProvider:
                         }]
                     )
 
-            # Multi-tool synthesis
+            # Multi-tool chaining: when query asks for chair AND courses, call search_courses on turn 2
+            if "chair" in user_query.lower() and "course" in user_query.lower() and len(tool_results) == 1:
+                return LLMResponse(
+                    tool_calls=[{
+                        "id": "call_multi_2",
+                        "name": "search_courses",
+                        "arguments": {"department": "CS"}
+                    }]
+                )
+
+            # Multi-tool synthesis when all tools completed
             chair_found = "Dr. Alan Turing"
             for tr in tool_results:
                 content = tr.get("content", "")
