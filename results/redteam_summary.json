@@ -1,0 +1,11 @@
+{
+  "baseline_asr": 37.5,
+  "baseline_ci": "37.5% [22.93%, 54.75%]",
+  "defended_asr": 0.0,
+  "defended_ci": "0.0% [0.0%, 10.72%]",
+  "adaptive_asr": 10.0,
+  "adaptive_ci": "10.0% [1.79%, 40.41%]",
+  "utility_baseline": 71.4,
+  "utility_defended": 71.4,
+  "utility_cost": 0.0
+}

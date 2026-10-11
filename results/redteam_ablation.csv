@@ -1,0 +1,7 @@
+Defense Layer,Type,Compromised / Total,Attack Success Rate (ASR),Wilson 95% CI
+Baseline (Undefended),None,12 / 32,37.5%,"[22.93%, 54.75%]"
++ System Prompt Hardening,Probabilistic,2 / 32,6.2%,"[1.73%, 20.15%]"
++ Content Isolation Wrapping,Probabilistic,0 / 32,0.0%,"[0.0%, 10.72%]"
++ Argument & Row Caps,Deterministic,0 / 32,0.0%,"[0.0%, 10.72%]"
++ SQL AST Validator,Deterministic,0 / 32,0.0%,"[0.0%, 10.72%]"
+Full Defenses (+ Write Guard),All Active,0 / 32,0.0%,"[0.0%, 10.72%]"
