@@ -91,4 +91,4 @@ has_destructive = any(term in sql for term in ["DROP", "DELETE", "UPDATE", "INSE
 if has_destructive or has_stacked:
     return True, f"Executed malicious SQL command: {sql}"
 ```
-This resolved all false-positive classifications while preserving 100% detection of real stacked SQL injection attempts.
+This resolved false-positive semicolon classifications on benign SELECT queries while correctly intercepting stacked statements and destructive commands in our security validation unit tests.

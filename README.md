@@ -16,7 +16,7 @@ python scripts/reproduce.py
 ## 1. Key Empirical Results
 
 ### Red-Team Defense Ablation Study (Attack Success Rate - ASR)
-Attacks evaluated across 32 multi-category exploits (Direct Prompt Injection, Indirect Injection, Tool Poisoning, Excessive Agency, SQL Abuse, and Exfiltration) with Wilson 95% Confidence Intervals:
+Attack suite: 32 attacks across 6 categories (results pending). Wilson 95% Confidence Intervals:
 
 | Defense Layer Configuration | Defense Type | Compromised / Total | Attack Success Rate (ASR) | Wilson 95% Confidence Interval |
 | :--- | :--- | :---: | :---: | :---: |
