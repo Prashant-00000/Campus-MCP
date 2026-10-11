@@ -78,8 +78,8 @@ server.register_tool(
     name="search_courses",
     description=(
         "Search academic courses in the university catalog by keyword, department code, or max course level. "
-        "WHEN TO USE: Use when the user asks about available classes, course offerings, credit hours, prerequisites, or syllabi. "
-        "WHEN NOT TO USE: Do NOT use to look up campus events, department administration emails, or faculty office hours."
+        "WHEN TO USE: Use when the user asks about available classes, course codes, titles, credit hours, instructor IDs, and course levels (100-400). "
+        "WHEN NOT TO USE: Do NOT use for course syllabus document files, prerequisite dependency trees, campus events, or faculty office hours."
     ),
     input_schema={
         "type": "object",
@@ -90,11 +90,11 @@ server.register_tool(
             },
             "department": {
                 "type": "string",
-                "description": "Optional department code filter (e.g. 'CS', 'MATH', 'PHYS', 'ENGL')."
+                "description": "Optional uppercase department code filter (e.g. 'CS', 'MATH', 'PHYS', 'ENGL', 'BIO')."
             },
             "level_cap": {
                 "type": "integer",
-                "description": "Optional upper bound on course level (e.g. 200 for lower-division only, 400 for all undergraduate)."
+                "description": "Optional upper bound on course level (e.g. 200 for lower-division only, 400 for all undergraduate courses)."
             }
         }
     },
@@ -122,9 +122,9 @@ def get_department_handler(args: Dict[str, Any]) -> str:
 server.register_tool(
     name="get_department",
     description=(
-        "Retrieve official directory and administrative details for a specific academic department. "
-        "WHEN TO USE: Use when the user asks for the department chair, main office location, or administrative contact email. "
-        "WHEN NOT TO USE: Do NOT use to list course offerings or look up individual faculty member office hours."
+        "Retrieve official directory and administrative details for an academic department. "
+        "WHEN TO USE: Use when the user asks for the department chair, main department office location, or administrative contact email. "
+        "WHEN NOT TO USE: Do NOT use to look up an individual professor's personal office hours or research area (use get_faculty instead), or to list course offerings (use search_courses)."
     ),
     input_schema={
         "type": "object",
@@ -152,12 +152,20 @@ def list_events_handler(args: Dict[str, Any]) -> str:
     if category and category not in valid_cats:
         return f"Error: category '{category}' is invalid. Allowed categories: {', '.join(sorted(valid_cats))}."
 
+    raw_query = args.get("query")
+    query = str(raw_query).strip() if raw_query is not None else ""
+
     sql = "SELECT id, title, date, location, category, description FROM events WHERE 1=1"
     params = []
 
     if category:
         sql += " AND category = ?"
         params.append(category)
+
+    if query:
+        sql += " AND (title LIKE ? OR description LIKE ?)"
+        term = f"%{query}%"
+        params.extend([term, term])
 
     sql += " ORDER BY date ASC LIMIT 10"
 
@@ -172,9 +180,9 @@ def list_events_handler(args: Dict[str, Any]) -> str:
 server.register_tool(
     name="list_events",
     description=(
-        "List scheduled campus events, academic symposiums, career fairs, and workshops. "
-        "WHEN TO USE: Use when the user asks about campus calendar, dates of hackathons, career fairs, or guest lectures. "
-        "WHEN NOT TO USE: Do NOT use to search for academic course schedules or grade deadlines."
+        "List scheduled campus events, workshops, career fairs, and academic symposiums. "
+        "WHEN TO USE: Use when the user asks about the campus calendar, dates of events, career fairs ('career'), hackathons ('workshop'), or guest lectures ('academic'). "
+        "WHEN NOT TO USE: Do NOT use to search for academic course schedules, grades, or faculty contact details."
     ),
     input_schema={
         "type": "object",
@@ -182,7 +190,11 @@ server.register_tool(
             "category": {
                 "type": "string",
                 "enum": ["academic", "career", "workshop", "sports"],
-                "description": "Optional category filter: 'academic', 'career', 'workshop', or 'sports'."
+                "description": "Optional category filter: 'academic' (lectures/symposiums), 'career' (job fairs), 'workshop' (hackathons/labs), or 'sports'."
+            },
+            "query": {
+                "type": "string",
+                "description": "Optional search term to match event title or description (e.g. 'hackathon', 'career', 'Turing')."
             }
         }
     },
@@ -211,9 +223,9 @@ def get_faculty_handler(args: Dict[str, Any]) -> str:
 server.register_tool(
     name="get_faculty",
     description=(
-        "Retrieve faculty profiles, research areas, office locations, and office hours. "
-        "WHEN TO USE: Use when the user asks about a professor's contact email, office hours, or research specialization. "
-        "WHEN NOT TO USE: Do NOT use to list department-wide graduation requirements or general courses."
+        "Retrieve faculty profiles, research specialization areas, faculty office locations, and office hours for individual professors. "
+        "WHEN TO USE: Use when the user asks about an individual professor's email, office hours, or research specialization area. "
+        "WHEN NOT TO USE: Do NOT use to look up who chairs an academic department or the department's main administrative office (use get_department instead); do NOT use for general course catalog listings."
     ),
     input_schema={
         "type": "object",

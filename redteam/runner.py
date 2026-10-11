@@ -20,9 +20,11 @@ from tabulate import tabulate
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from datetime import datetime, timezone
 from agent.llm import LLMProvider
 from agent.react_agent import ReActAgent
 from agent.defenses import DefenseConfig
+from agent.audit_logger import AuditLogger, check_contamination_guard, AUDIT_DIR
 from eval.runner import EvalHarness
 from eval.stats import wilson_score_interval, format_ci
 
@@ -32,9 +34,18 @@ RESULTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 class RedTeamHarness:
-    def __init__(self, model_name: str = "model-a-simulator", provider: str = "simulator"):
-        self.model_name = model_name
-        self.provider = provider
+    """
+    Red-team runner. Requires a real LLMProvider — NOT the simulator.
+    Construct with provider_from_env() or LLMProvider() directly.
+    """
+
+    def __init__(self, llm: LLMProvider, run_id: Optional[str] = None):
+        self.llm = llm
+        self.model_name = llm.model_name
+        self.provider = llm.provider
+        self.run_id = run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        clean_model_id = self.model_name.replace("/", "_").replace(":", "_")
+        self.audit_log_path = os.path.join(AUDIT_DIR, f"{self.run_id}_{clean_model_id}.jsonl")
 
     def load_attacks(self, filepath: str = ATTACKS_PATH) -> List[Dict[str, Any]]:
         attacks = []
@@ -108,9 +119,10 @@ class RedTeamHarness:
         suite_name: str = "suite"
     ) -> Dict[str, Any]:
         """Runs attack suite with specified defense configuration."""
+        check_contamination_guard(self.audit_log_path, self.model_name)
+        audit_logger = AuditLogger(log_path=self.audit_log_path, model=self.model_name)
         attacks = self.load_attacks(attacks_file)
-        llm = LLMProvider(model_name=self.model_name, provider=self.provider)
-        agent = ReActAgent(llm=llm, defenses=defenses)
+        agent = ReActAgent(llm=self.llm, defenses=defenses, audit_logger=audit_logger)
 
         results = []
         compromised_count = 0
@@ -157,7 +169,16 @@ class RedTeamHarness:
         """Runs the complete ablation study, full defense, adaptive round, and utility re-check."""
         print("=" * 75)
         print("PHASE 4: RED-TEAMING, DEFENSE ABLATIONS, & UTILITY IMPACT")
+        print(f"Model: {self.model_name} | Provider: {self.provider} | Run ID: {self.run_id}")
+        print(f"Audit Log: {self.audit_log_path}")
         print("=" * 75)
+
+        # Contamination Guard: refuse to start if results or audit logs belong to another model
+        ablation_csv = os.path.join(RESULTS_DIR, "redteam_ablation.csv")
+        summary_json = os.path.join(RESULTS_DIR, "redteam_summary.json")
+        check_contamination_guard(self.audit_log_path, self.model_name)
+        check_contamination_guard(ablation_csv, self.model_name)
+        check_contamination_guard(summary_json, self.model_name)
 
         # 1. Baseline Undefended
         print("\n[1/5] Running Undefended Baseline Attack Suite...")
@@ -205,11 +226,11 @@ class RedTeamHarness:
 
         # 4. Utility Re-Check
         print("[4/5] Running Utility Re-Check (Evaluating Defended Agent on Normal Test Split)...")
-        eval_harness_defended = EvalHarness(model_name=self.model_name, trials=3, defenses=d_all)
+        eval_harness_defended = EvalHarness(llm=self.llm, trials=3, defenses=d_all)
         utility_defended = eval_harness_defended.run_eval(split="test", output_csv_name="utility_defended_test.csv")
 
         # Load baseline test utility
-        eval_harness_baseline = EvalHarness(model_name=self.model_name, trials=3, defenses=DefenseConfig.none())
+        eval_harness_baseline = EvalHarness(llm=self.llm, trials=3, defenses=DefenseConfig.none())
         utility_baseline = eval_harness_baseline.run_eval(split="test", output_csv_name="utility_baseline_test.csv")
 
         utility_cost_pct = round(utility_baseline["task_success_rate"] - utility_defended["task_success_rate"], 1)
@@ -285,6 +306,9 @@ class RedTeamHarness:
         summary_json = os.path.join(RESULTS_DIR, "redteam_summary.json")
         with open(summary_json, "w", encoding="utf-8") as f:
             json.dump({
+                "model": self.model_name,
+                "provider": self.provider,
+                "run_id": self.run_id,
                 "baseline_asr": base_res["asr_pct"],
                 "baseline_ci": base_res["asr_ci"],
                 "defended_asr": res_all["asr_pct"],
@@ -300,5 +324,6 @@ class RedTeamHarness:
         print(f"Saved red-team summary to: {summary_json}\n")
 
 if __name__ == "__main__":
-    harness = RedTeamHarness()
+    from agent.llm import provider_from_env
+    harness = RedTeamHarness(llm=provider_from_env())
     harness.run_full_experiment()

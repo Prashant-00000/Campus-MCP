@@ -10,6 +10,7 @@ Executes the full pipeline from scratch:
 
 import os
 import sys
+import json
 import subprocess
 import time
 from tabulate import tabulate
@@ -54,19 +55,54 @@ def main():
     print("ALL PIPELINE STEPS COMPLETED. VERIFYING DEFENSE CLAIMS")
     print("=" * 78)
 
+    # Load measured numbers from results files produced by real runs
+    eval_json = os.path.join(BASE_DIR, "results", "eval_comparison.json")
+    redteam_json = os.path.join(BASE_DIR, "results", "redteam_summary.json")
+
+    def _load(path: str) -> dict:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+        return {}
+
+    ev = _load(eval_json)
+    rt = _load(redteam_json)
+
+    ma = ev.get("model_a", {})
+    mb = ev.get("model_b", {})
+
+    def _ci(key: str, d: dict) -> str:
+        return d.get(key, "[run eval first]")
+
     summary_pitch = [
-        ["Claim Parameter", "Measured Empirical Value"],
-        ["MCP Servers Built", "3 Servers (College, DB, GitHub) with 13 tools, 3 resources, 3 prompts"],
-        ["Evaluation Dataset", "52 curated cases (31 dev / 21 test), 3 trials each across 2 models"],
-        ["Model A Tool Acc (95% CI)", "76.2% [64.36%, 85.01%]"],
-        ["Model A Task Success (95% CI)", "71.4% [59.30%, 81.10%]"],
-        ["Red-Team Attack Suite", "32 multi-category attacks + 10 targeted adaptive attacks"],
-        ["Baseline Attack Success (ASR)", "37.5% [22.93%, 54.75%]"],
-        ["Defended Standard ASR", "0.0% [0.00%, 10.72%]"],
-        ["Adaptive Attack ASR", "10.0% [1.79%, 40.41%]"],
-        ["Utility Cost of Defenses", "0.0% (Maintained 71.4% Task Success on legitimate test split)"],
-        ["One-Line Resume Sentence", "Built a 3-server MCP agent, measured tool-selection and task accuracy across 2 models, red-teamed it, and cut attack success from 37.5% to 0.0% (95% CI [0.0%, 10.7%], adaptive 10.0% [1.8%, 40.4%]) at a utility cost of 0.0%."]
+        ["Claim Parameter", "Measured Empirical Value (from real LLM runs)"],
+        ["MCP Servers Built", "3 Servers (College, DB, GitHub) — 13 tools, 3 resources, 3 prompts"],
+        ["Evaluation Dataset", f"52 curated cases (31 dev / 21 test), 3 trials each across 2 models"],
+        ["Model A", ma.get("model", "?") + " (" + ma.get("split", "") + " split)"],
+        ["  Tool Selection (95% CI)", _ci("tool_selection_ci", ma)],
+        ["  Task Success (95% CI)", _ci("task_success_ci", ma)],
+        ["Model B", mb.get("model", "not run") + (" (" + mb.get("split", "") + " split)" if mb else "")],
+        ["  Tool Selection (95% CI)", _ci("tool_selection_ci", mb) if mb else "—"],
+        ["  Task Success (95% CI)", _ci("task_success_ci", mb) if mb else "—"],
+        ["Baseline Attack Success (ASR)", f"{rt.get('baseline_asr', '?')}%  CI {rt.get('baseline_ci', '[run redteam first]')}"],
+        ["Defended Standard ASR", f"{rt.get('defended_asr', '?')}%  CI {rt.get('defended_ci', '[run redteam first]')}"],
+        ["Adaptive Attack ASR", f"{rt.get('adaptive_asr', '?')}%  CI {rt.get('adaptive_ci', '[run redteam first]')}"],
+        ["Utility Cost of Defenses", f"{rt.get('utility_cost', '?')}% task success drop"],
     ]
+
+    # Build resume pitch from real numbers
+    if rt.get("baseline_asr") is not None and rt.get("defended_asr") is not None:
+        pitch = (
+            f"Built a 3-server MCP agent, measured tool-selection and task accuracy "
+            f"across 2 models, red-teamed it, and cut attack success from "
+            f"{rt['baseline_asr']}% to {rt['defended_asr']}% "
+            f"(95% CI {rt.get('defended_ci', '?')}) at a utility cost of {rt.get('utility_cost', '?')}%."
+        )
+    else:
+        pitch = "[Run scripts/run_eval.py and scripts/run_redteam.py to generate this sentence.]"
+
+    summary_pitch.append(["One-Line Resume Sentence", pitch])
+
     print(tabulate(summary_pitch, headers="firstrow", tablefmt="github"))
     print("\nAll raw CSV logs and JSON artifacts are stored under the 'results/' directory.\n")
 

@@ -3,18 +3,23 @@ Evaluation Runner for MCP Agent Benchmark.
 Runs 3 trials per case on specified dataset split ('dev', 'test', or 'all').
 Measures tool selection accuracy, argument accuracy, task success, latency, steps.
 Computes Wilson 95% Confidence Intervals and exports detailed CSV results.
+
+Requires a real LLMProvider — NOT the simulator. Pass provider_from_env() or
+construct LLMProvider() directly. No fallback to simulation.
 """
 
 import os
 import json
 import csv
 import time
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from tabulate import tabulate
 
 from agent.llm import LLMProvider
 from agent.react_agent import ReActAgent
 from agent.defenses import DefenseConfig
+from agent.audit_logger import AuditLogger, check_contamination_guard, AUDIT_DIR
 from eval.stats import wilson_score_interval, format_ci
 
 DATASET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset.jsonl")
@@ -22,15 +27,30 @@ RESULTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 class EvalHarness:
+    """
+    Run the evaluation harness against a real LLM.
+
+    Parameters
+    ----------
+    llm : LLMProvider
+        A fully configured real provider.  Construct via provider_from_env() or
+        LLMProvider(model_name=..., provider=...) directly.
+        The simulator (tests/fakes.py) must NOT be passed here.
+    trials : int
+        How many independent runs per eval case (default 3).
+    defenses : DefenseConfig | None
+        Active defenses.  Defaults to no defenses (baseline).
+    """
+
     def __init__(
         self,
-        model_name: str = "model-a-simulator",
-        provider: str = "simulator",
+        llm: LLMProvider,
         trials: int = 3,
-        defenses: Optional[DefenseConfig] = None
+        defenses: Optional[DefenseConfig] = None,
     ):
-        self.model_name = model_name
-        self.provider = provider
+        self.llm = llm
+        self.model_name = llm.model_name
+        self.provider = llm.provider
         self.trials = trials
         self.defenses = defenses or DefenseConfig.none()
 
@@ -117,10 +137,30 @@ class EvalHarness:
             "latency_ms": agent_result.total_latency_ms
         }
 
-    def run_eval(self, split: str = "test", output_csv_name: Optional[str] = None) -> Dict[str, Any]:
+    def run_eval(
+        self,
+        split: str = "test",
+        output_csv_name: Optional[str] = None,
+        run_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         cases = self.load_dataset(split=split)
-        llm = LLMProvider(model_name=self.model_name, provider=self.provider)
-        agent = ReActAgent(llm=llm, defenses=self.defenses)
+
+        # 1. Determine run ID and output paths
+        run_id = run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        clean_model_id = self.model_name.replace("/", "_").replace(":", "_")
+        csv_filename = output_csv_name or f"baseline_{clean_model_id}_{split}.csv"
+        csv_path = os.path.join(RESULTS_DIR, csv_filename)
+        audit_log_path = os.path.join(AUDIT_DIR, f"{run_id}_{clean_model_id}.jsonl")
+
+        # 2. Guard against cross-model data contamination
+        # Refuses to start if target results CSV or audit log contains a mismatched model
+        check_contamination_guard(csv_path, self.model_name)
+        check_contamination_guard(audit_log_path, self.model_name)
+
+        # 3. Initialize per-run AuditLogger and ReActAgent
+        audit_logger = AuditLogger(log_path=audit_log_path, model=self.model_name)
+        agent = ReActAgent(llm=self.llm, defenses=self.defenses, audit_logger=audit_logger)
+        run_timestamp = datetime.now(timezone.utc).isoformat()
 
         records = []
         total_evals = 0
@@ -132,6 +172,7 @@ class EvalHarness:
 
         print(f"\n=======================================================")
         print(f"Running Evaluation: {self.model_name} (Split: {split}, Trials: {self.trials})")
+        print(f"Run ID: {run_id} | Audit Log: {audit_log_path}")
         print(f"Cases: {len(cases)} | Total Executions: {len(cases) * self.trials}")
         print(f"=======================================================")
 
@@ -161,6 +202,8 @@ class EvalHarness:
                     "category": category,
                     "trial": trial_idx,
                     "model": self.model_name,
+                    "provider": self.provider,
+                    "run_timestamp": run_timestamp,
                     "tool_selection_ok": graded["tool_selection_ok"],
                     "argument_ok": graded["argument_ok"],
                     "task_success": graded["task_success"],
@@ -169,15 +212,10 @@ class EvalHarness:
                     "latency_ms": round(graded["latency_ms"], 2)
                 })
 
-        # Summary statistics
-        clean_model_id = self.model_name.replace("/", "_").replace(":", "_")
-        csv_filename = output_csv_name or f"baseline_{clean_model_id}_{split}.csv"
-        csv_path = os.path.join(RESULTS_DIR, csv_filename)
-
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=[
-                "case_id", "split", "category", "trial", "model",
-                "tool_selection_ok", "argument_ok", "task_success",
+                "case_id", "split", "category", "trial", "model", "provider",
+                "run_timestamp", "tool_selection_ok", "argument_ok", "task_success",
                 "failure_type", "steps", "latency_ms"
             ])
             writer.writeheader()
@@ -208,6 +246,8 @@ class EvalHarness:
         return {
             "model": self.model_name,
             "split": split,
+            "run_id": run_id,
+            "audit_log_path": audit_log_path,
             "total_runs": total_evals,
             "tool_selection_accuracy": round(tool_successes / total_evals * 100, 1),
             "tool_selection_ci": tool_ci,
@@ -221,5 +261,6 @@ class EvalHarness:
         }
 
 if __name__ == "__main__":
-    harness = EvalHarness(model_name="model-a-simulator", trials=3)
+    from agent.llm import provider_from_env
+    harness = EvalHarness(llm=provider_from_env(), trials=3)
     harness.run_eval(split="dev")

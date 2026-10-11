@@ -61,7 +61,7 @@ class ReActAgent:
         self.llm = llm
         self.client_manager = client_manager or MCPClientManager()
         self.defenses = defenses or DefenseConfig.none()
-        self.audit_logger = audit_logger or AuditLogger()
+        self.audit_logger = audit_logger
         self.max_steps = max_steps
         self.temperature = temperature
 
@@ -170,17 +170,18 @@ class ReActAgent:
 
                 call_duration_ms = (time.time() - call_start) * 1000
 
-                # Audit Log every invocation
-                self.audit_logger.log_tool_call(
-                    step=step,
-                    model=self.llm.model_name,
-                    tool_name=tool_name,
-                    arguments=tool_args,
-                    result_text=result_text,
-                    is_error=is_error,
-                    latency_ms=call_duration_ms,
-                    defense_triggered=defense_block_reason
-                )
+                # Audit Log invocation if logger configured
+                if self.audit_logger:
+                    self.audit_logger.log_tool_call(
+                        step=step,
+                        model=self.llm.model_name,
+                        tool_name=tool_name,
+                        arguments=tool_args,
+                        result_text=result_text,
+                        is_error=is_error,
+                        latency_ms=call_duration_ms,
+                        defense_triggered=defense_block_reason
+                    )
 
                 tool_records.append(ToolExecutionRecord(
                     tool_name=tool_name,
