@@ -10,10 +10,15 @@ Implements deterministic security controls:
 """
 
 import os
+import sys
 import sqlite3
 import re
 import json
 from typing import Dict, Any, List, Optional
+
+# Allow standalone execution via python servers/db_server.py or MCP Inspector
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from servers.mcp_base import MCPServer
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
@@ -82,9 +87,11 @@ def validate_sql_query(query: str) -> tuple[bool, Optional[str]]:
 # Tool 1: query_db
 # -------------------------------------------------------------------------
 def query_db_handler(args: Dict[str, Any]) -> str:
-    sql = args.get("sql_query", "").strip()
-    if not sql:
-        return "Error: sql_query parameter is required."
+    raw_sql = args.get("sql_query")
+    if raw_sql is None or str(raw_sql).strip() == "":
+        return "Error: sql_query parameter is required and cannot be empty."
+
+    sql = str(raw_sql).strip()
 
     is_valid, err_msg = validate_sql_query(sql)
     if not is_valid:
@@ -164,7 +171,11 @@ server.register_tool(
 # Tool 3: describe_table
 # -------------------------------------------------------------------------
 def describe_table_handler(args: Dict[str, Any]) -> str:
-    table_name = args.get("table_name", "").strip().lower()
+    raw_tbl = args.get("table_name")
+    if raw_tbl is None or str(raw_tbl).strip() == "":
+        return "Error: table_name parameter is required and cannot be empty."
+
+    table_name = str(raw_tbl).strip().lower()
     if table_name not in ALLOWED_TABLES:
         return f"Error: Table '{table_name}' does not exist or is not queryable. Allowed tables: {', '.join(sorted(ALLOWED_TABLES))}."
 
@@ -199,11 +210,20 @@ server.register_tool(
 # Tool 4: sample_table
 # -------------------------------------------------------------------------
 def sample_table_handler(args: Dict[str, Any]) -> str:
-    table_name = args.get("table_name", "").strip().lower()
-    limit = min(int(args.get("limit", 5)), 10)
+    raw_tbl = args.get("table_name")
+    if raw_tbl is None or str(raw_tbl).strip() == "":
+        return "Error: table_name parameter is required and cannot be empty."
 
+    table_name = str(raw_tbl).strip().lower()
     if table_name not in ALLOWED_TABLES:
         return f"Error: Table '{table_name}' is not in the allowed query list."
+
+    raw_limit = args.get("limit", 5)
+    try:
+        limit = int(raw_limit)
+        limit = max(1, min(limit, 10))
+    except (ValueError, TypeError):
+        limit = 5
 
     with get_db() as conn:
         cursor = conn.cursor()

@@ -6,9 +6,14 @@ Operates over local SQLite store seeded with repo data and indirect injection pa
 """
 
 import os
+import sys
 import sqlite3
 import json
 from typing import Dict, Any, List, Optional
+
+# Allow standalone execution via python servers/github_server.py or MCP Inspector
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from servers.mcp_base import MCPServer
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
@@ -25,8 +30,15 @@ def get_db():
 # Tool 1: list_issues
 # -------------------------------------------------------------------------
 def list_issues_handler(args: Dict[str, Any]) -> str:
-    state = args.get("state", "open").lower()
-    label = args.get("label")
+    raw_state = args.get("state", "open")
+    state = str(raw_state).strip().lower() if raw_state is not None else "open"
+    if state not in ("open", "closed", "all"):
+        return f"Error: state '{state}' is invalid. Allowed: 'open', 'closed', or 'all'."
+
+    raw_label = args.get("label")
+    label = str(raw_label).strip() if raw_label is not None else None
+    if label == "":
+        label = None
 
     sql = "SELECT number, title, state, author, created_at, labels FROM issues WHERE 1=1"
     params = []
@@ -50,7 +62,10 @@ def list_issues_handler(args: Dict[str, Any]) -> str:
     results = []
     for r in rows:
         d = dict(r)
-        d["labels"] = json.loads(d["labels"])
+        try:
+            d["labels"] = json.loads(d["labels"])
+        except Exception:
+            d["labels"] = []
         results.append(d)
 
     return json.dumps(results, indent=2)
@@ -83,18 +98,28 @@ server.register_tool(
 # Tool 2: get_issue
 # -------------------------------------------------------------------------
 def get_issue_handler(args: Dict[str, Any]) -> str:
-    issue_number = args.get("issue_number")
-    if issue_number is None:
-        return "Error: issue_number parameter is required."
+    raw_num = args.get("issue_number")
+    if raw_num is None or str(raw_num).strip() == "":
+        return "Error: issue_number parameter is required and cannot be empty."
+
+    try:
+        issue_number = int(raw_num)
+        if issue_number <= 0:
+            return f"Error: issue_number must be a positive integer, received {issue_number}."
+    except (ValueError, TypeError):
+        return f"Error: issue_number must be an integer, received '{raw_num}'."
 
     with get_db() as conn:
-        row = conn.execute("SELECT * FROM issues WHERE number = ?", (int(issue_number),)).fetchone()
+        row = conn.execute("SELECT * FROM issues WHERE number = ?", (issue_number,)).fetchone()
 
     if not row:
         return f"Issue #{issue_number} not found."
 
     d = dict(row)
-    d["labels"] = json.loads(d["labels"])
+    try:
+        d["labels"] = json.loads(d["labels"])
+    except Exception:
+        d["labels"] = []
     return json.dumps(d, indent=2)
 
 server.register_tool(
@@ -121,9 +146,11 @@ server.register_tool(
 # Tool 3: search_code
 # -------------------------------------------------------------------------
 def search_code_handler(args: Dict[str, Any]) -> str:
-    query = args.get("query", "").strip()
-    if not query:
-        return "Error: query parameter is required."
+    raw_query = args.get("query")
+    if raw_query is None or str(raw_query).strip() == "":
+        return "Error: query parameter is required and cannot be empty."
+
+    query = str(raw_query).strip()
 
     sql = "SELECT path, language, content FROM files WHERE content LIKE ? LIMIT 5"
     with get_db() as conn:
@@ -134,7 +161,6 @@ def search_code_handler(args: Dict[str, Any]) -> str:
 
     results = []
     for r in rows:
-        # Provide matching snippet
         content = r["content"]
         snippet = "\n".join([line for line in content.splitlines() if query.lower() in line.lower()][:3])
         results.append({
@@ -169,9 +195,11 @@ server.register_tool(
 # Tool 4: get_file
 # -------------------------------------------------------------------------
 def get_file_handler(args: Dict[str, Any]) -> str:
-    file_path = args.get("file_path", "").strip()
-    if not file_path:
-        return "Error: file_path parameter is required."
+    raw_path = args.get("file_path")
+    if raw_path is None or str(raw_path).strip() == "":
+        return "Error: file_path parameter is required and cannot be empty."
+
+    file_path = str(raw_path).strip()
 
     with get_db() as conn:
         row = conn.execute("SELECT * FROM files WHERE path = ?", (file_path,)).fetchone()
@@ -205,12 +233,24 @@ server.register_tool(
 # Tool 5: create_issue (WRITE TOOL - excessive agency & exfiltration test)
 # -------------------------------------------------------------------------
 def create_issue_handler(args: Dict[str, Any]) -> str:
-    title = args.get("title", "").strip()
-    body = args.get("body", "").strip()
-    labels = args.get("labels", ["triage"])
+    raw_title = args.get("title")
+    raw_body = args.get("body")
 
-    if not title or not body:
-        return "Error: Both 'title' and 'body' are required to create an issue."
+    if raw_title is None or str(raw_title).strip() == "":
+        return "Error: 'title' is required and cannot be empty."
+    if raw_body is None or str(raw_body).strip() == "":
+        return "Error: 'body' is required and cannot be empty."
+
+    title = str(raw_title).strip()
+    body = str(raw_body).strip()
+
+    raw_labels = args.get("labels", ["triage"])
+    if isinstance(raw_labels, list):
+        labels = [str(l).strip() for l in raw_labels if str(l).strip()]
+    elif isinstance(raw_labels, str):
+        labels = [raw_labels.strip()]
+    else:
+        labels = ["triage"]
 
     with get_db() as conn:
         cur = conn.cursor()

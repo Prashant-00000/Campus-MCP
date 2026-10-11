@@ -5,9 +5,14 @@ Follows MCP standard JSON-RPC 2.0 over stdio with output capping and stderr logg
 """
 
 import os
+import sys
 import sqlite3
 import json
 from typing import Dict, Any, Optional
+
+# Allow standalone execution via python servers/college_server.py or MCP Inspector
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from servers.mcp_base import MCPServer
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
@@ -24,9 +29,23 @@ server = MCPServer(name="college-server", version="1.0.0")
 # Tool 1: search_courses
 # -------------------------------------------------------------------------
 def search_courses_handler(args: Dict[str, Any]) -> str:
-    query = args.get("query", "").strip()
-    department = args.get("department")
-    level_cap = args.get("level_cap")
+    raw_query = args.get("query")
+    query = str(raw_query).strip() if raw_query is not None else ""
+    
+    raw_dept = args.get("department")
+    department = str(raw_dept).strip().upper() if raw_dept is not None else None
+    if department == "":
+        department = None
+
+    raw_level = args.get("level_cap")
+    level_cap = None
+    if raw_level is not None and str(raw_level).strip() != "":
+        try:
+            level_cap = int(raw_level)
+            if level_cap < 0:
+                return "Error: level_cap cannot be negative."
+        except (ValueError, TypeError):
+            return f"Error: level_cap must be a valid integer, received '{raw_level}'."
 
     sql = "SELECT course_code, title, department, credits, instructor_id, level, description FROM courses WHERE 1=1"
     params = []
@@ -38,11 +57,11 @@ def search_courses_handler(args: Dict[str, Any]) -> str:
 
     if department:
         sql += " AND department = ?"
-        params.append(department.upper())
+        params.append(department)
 
-    if level_cap:
+    if level_cap is not None:
         sql += " AND level <= ?"
-        params.append(int(level_cap))
+        params.append(level_cap)
 
     sql += " ORDER BY level, course_code LIMIT 10"
 
@@ -86,9 +105,11 @@ server.register_tool(
 # Tool 2: get_department
 # -------------------------------------------------------------------------
 def get_department_handler(args: Dict[str, Any]) -> str:
-    dept_code = args.get("dept_code", "").strip().upper()
-    if not dept_code:
-        return "Error: dept_code is required."
+    raw_dept = args.get("dept_code")
+    if raw_dept is None or str(raw_dept).strip() == "":
+        return "Error: dept_code is required and cannot be empty."
+
+    dept_code = str(raw_dept).strip().upper()
 
     with get_db() as conn:
         row = conn.execute("SELECT * FROM departments WHERE code = ?", (dept_code,)).fetchone()
@@ -122,14 +143,21 @@ server.register_tool(
 # Tool 3: list_events
 # -------------------------------------------------------------------------
 def list_events_handler(args: Dict[str, Any]) -> str:
-    category = args.get("category")
+    raw_cat = args.get("category")
+    category = str(raw_cat).strip().lower() if raw_cat is not None else None
+    if category == "":
+        category = None
+
+    valid_cats = {"academic", "career", "workshop", "sports"}
+    if category and category not in valid_cats:
+        return f"Error: category '{category}' is invalid. Allowed categories: {', '.join(sorted(valid_cats))}."
 
     sql = "SELECT id, title, date, location, category, description FROM events WHERE 1=1"
     params = []
 
     if category:
         sql += " AND category = ?"
-        params.append(category.lower())
+        params.append(category)
 
     sql += " ORDER BY date ASC LIMIT 10"
 
@@ -165,9 +193,11 @@ server.register_tool(
 # Tool 4: get_faculty
 # -------------------------------------------------------------------------
 def get_faculty_handler(args: Dict[str, Any]) -> str:
-    name_or_id = args.get("name_or_id", "").strip()
-    if not name_or_id:
-        return "Error: name_or_id parameter is required."
+    raw_name = args.get("name_or_id")
+    if raw_name is None or str(raw_name).strip() == "":
+        return "Error: name_or_id parameter is required and cannot be empty."
+
+    name_or_id = str(raw_name).strip()
 
     sql = "SELECT id, name, department, title, email, research_area, office_hours FROM faculty WHERE id = ? OR name LIKE ? LIMIT 5"
     with get_db() as conn:
