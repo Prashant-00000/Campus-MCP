@@ -4,7 +4,7 @@
 
 - **v1:** Literal normalized substring matching. Retired because human-readable dates, spacing, and atomic facts produced false negatives.
 - **v2:** Unicode normalization, atomic fact matching, date variants, weekday expansion, and numeric word boundaries. Used for the stored task-success baseline.
-- **v3:** Frozen for the dev analysis after the commit that introduces it. It keeps answer correctness separate from tool-use quality and adds tool precision/recall, missing arguments, extra calls, and identical-call redundancy. It accepts case-insensitive whole-word argument expansions such as `Hopper` -> `Grace Hopper`.
+- **v3:** Frozen for the dev analysis at commit `ed1f609`. It keeps answer correctness separate from tool-use quality and adds tool precision/recall, missing arguments, extra calls, and identical-call redundancy. It accepts case-insensitive whole-word argument expansions such as `Hopper` -> `Grace Hopper`.
 
 The test split must not be regraded after v3 is frozen. Any later grader experiment belongs on dev artifacts and must receive a new version label.
 
