@@ -8,7 +8,7 @@ import os
 import json
 import time
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 AUDIT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "audit_logs")
 
@@ -149,6 +149,44 @@ class AuditLogger:
         with open(self.log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
 
+    def log_llm_call(
+        self,
+        step: int,
+        model: str,
+        call_type: str,
+        llm_latency_ms: float,
+        cache_hit: bool,
+        prompt_tokens: Optional[int],
+        completion_tokens: Optional[int],
+        finish_reason: Optional[str],
+        retry_count: int = 0,
+        retry_wait_ms: float = 0.0,
+        tools_requested: Optional[List[str]] = None,
+        question: Optional[str] = None,
+        case_id: Optional[str] = None,
+    ):
+        """Appends a record for every LLM invocation (both tool selections and final answers)."""
+        record = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "session_id": self.session_id,
+            "event_type": "llm_call",
+            "step": step,
+            "model": model,
+            "case_id": case_id,
+            "question": question,
+            "call_type": call_type,
+            "llm_latency_ms": round(llm_latency_ms, 2),
+            "cache_hit": cache_hit,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "finish_reason": finish_reason,
+            "retry_count": retry_count,
+            "retry_wait_ms": round(retry_wait_ms, 2),
+            "tools_requested": tools_requested or [],
+        }
+        with open(self.log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+
     def log_session_end(
         self,
         model: str,
@@ -158,6 +196,11 @@ class AuditLogger:
         total_latency_ms: float,
         question: Optional[str] = None,
         case_id: Optional[str] = None,
+        n_tool_calls: int = 0,
+        n_llm_calls: int = 0,
+        llm_latency_ms: float = 0.0,
+        tool_latency_ms: float = 0.0,
+        retry_wait_ms: float = 0.0,
     ):
         """Appends a session-end record documenting final outcome and stop reason."""
         record = {
@@ -168,8 +211,13 @@ class AuditLogger:
             "case_id": case_id,
             "question": question,
             "steps_taken": steps_taken,
+            "n_llm_calls": n_llm_calls,
+            "n_tool_calls": n_tool_calls,
             "final_answer": final_answer,
             "stop_reason": stop_reason,
+            "llm_latency_ms": round(llm_latency_ms, 2),
+            "tool_latency_ms": round(tool_latency_ms, 2),
+            "retry_wait_ms": round(retry_wait_ms, 2),
             "total_latency_ms": round(total_latency_ms, 2),
         }
         with open(self.log_path, "a", encoding="utf-8") as f:

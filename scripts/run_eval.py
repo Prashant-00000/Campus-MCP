@@ -23,6 +23,18 @@ from eval.runner import EvalHarness
 
 
 def run_both_models():
+    import argparse
+    parser = argparse.ArgumentParser(description="Evaluation Benchmark Runner")
+    parser.add_argument("--split", choices=["dev", "test", "all"], default="dev", help="Dataset split (default: dev)")
+    parser.add_argument("--trials", type=int, default=3, help="Number of trials per case (default: 3)")
+    parser.add_argument("--model-a-only", action="store_true", help="Run only Model A")
+    parser.add_argument("--cases", type=str, default="", help="Comma-separated case IDs to filter (e.g. case_08,case_12)")
+    args, _ = parser.parse_known_args()
+
+    split = args.split
+    trials = args.trials
+    case_ids = [c.strip() for c in args.cases.split(",") if c.strip()] if args.cases else None
+
     # -- Read model config from environment --
     provider_a = os.getenv("MODEL_A_PROVIDER", os.getenv("LLM_PROVIDER", "")).strip()
     model_a = os.getenv("MODEL_A_MODEL", os.getenv("LLM_MODEL", "")).strip()
@@ -34,41 +46,36 @@ def run_both_models():
             "ERROR: Set MODEL_A_PROVIDER and MODEL_A_MODEL (or LLM_PROVIDER / LLM_MODEL) in .env\n"
             "  Example for Groq:\n"
             "    MODEL_A_PROVIDER=groq\n"
-            "    MODEL_A_MODEL=llama-3.1-8b-instant\n"
-            "    MODEL_B_PROVIDER=groq\n"
-            "    MODEL_B_MODEL=llama-3.3-70b-versatile\n"
+            "    MODEL_A_MODEL=openai/gpt-oss-20b\n"
             "    GROQ_API_KEY=gsk_..."
         )
         sys.exit(1)
 
-    llm_a = LLMProvider(model_name=model_a, provider=provider_a)
+    # Disable caching for evaluation
+    llm_a = LLMProvider(model_name=model_a, provider=provider_a, enable_cache=False)
 
-    if provider_b and model_b:
-        llm_b = LLMProvider(model_name=model_b, provider=provider_b)
+    if provider_b and model_b and not args.model_a_only:
+        llm_b = LLMProvider(model_name=model_b, provider=provider_b, enable_cache=False)
         two_model_run = True
     else:
-        print(
-            f"WARNING: MODEL_B_PROVIDER / MODEL_B_MODEL not set. "
-            f"Running single-model eval for {provider_a}/{model_a}.\n"
-            f"Set both to get a comparative 2-model benchmark."
-        )
         llm_b = None
         two_model_run = False
 
     print("=" * 70)
-    print("STARTING OFFICIAL 2-MODEL BENCHMARK ON TEST SPLIT")
+    print(f"BENCHMARK RUN: Split = {split} ({trials} trials per case, cache OFF)")
     print(f"Model A: {provider_a}/{model_a}")
     if two_model_run:
         print(f"Model B: {provider_b}/{model_b}")
-    print("Split: test (3 trials per case)")
     print("=" * 70)
 
-    harness_a = EvalHarness(llm=llm_a, trials=3)
-    res_a = harness_a.run_eval(split="test", output_csv_name=f"baseline_{model_a.replace('/', '_')}_test.csv")
+    clean_a = model_a.replace('/', '_').replace(':', '_')
+    harness_a = EvalHarness(llm=llm_a, trials=trials)
+    res_a = harness_a.run_eval(split=split, output_csv_name=f"baseline_{clean_a}_{split}.csv", case_ids=case_ids)
 
-    if two_model_run:
-        harness_b = EvalHarness(llm=llm_b, trials=3)
-        res_b = harness_b.run_eval(split="test", output_csv_name=f"baseline_{model_b.replace('/', '_')}_test.csv")
+    if two_model_run and llm_b:
+        clean_b = model_b.replace('/', '_').replace(':', '_')
+        harness_b = EvalHarness(llm=llm_b, trials=trials)
+        res_b = harness_b.run_eval(split=split, output_csv_name=f"baseline_{clean_b}_{split}.csv", case_ids=case_ids)
     else:
         res_b = None
 

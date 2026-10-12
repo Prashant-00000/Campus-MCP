@@ -47,6 +47,11 @@ class AgentRunResult:
     total_latency_ms: float = 0.0
     completed: bool = True
     error_message: Optional[str] = None
+    n_llm_calls: int = 0
+    n_tool_calls: int = 0
+    llm_latency_ms: float = 0.0
+    tool_latency_ms: float = 0.0
+    retry_wait_ms: float = 0.0
 
 class ReActAgent:
     def __init__(
@@ -84,10 +89,16 @@ class ReActAgent:
 
         tool_records: List[ToolExecutionRecord] = []
         step = 0
+        n_llm_calls = 0
+        n_tool_calls = 0
+        total_llm_ms = 0.0
+        total_tool_ms = 0.0
+        total_retry_wait_ms = 0.0
         final_answer = ""
 
         while step < self.max_steps:
             step += 1
+            n_llm_calls += 1
 
             # LLM generation step
             llm_resp: LLMResponse = self.llm.generate(
@@ -95,6 +106,32 @@ class ReActAgent:
                 tools=tools,
                 temperature=self.temperature
             )
+            total_llm_ms += llm_resp.llm_latency_ms
+            total_retry_wait_ms += getattr(llm_resp, "retry_wait_ms", 0.0)
+
+            # Determine call type for provenance tracking
+            if not llm_resp.tool_calls:
+                call_type = "direct_answer" if step == 1 else "final_answer"
+            else:
+                call_type = "tool_selection" if step == 1 else "tool_followup"
+
+            # Log every LLM call (both tool selections and final answers)
+            if self.audit_logger:
+                self.audit_logger.log_llm_call(
+                    step=step,
+                    model=self.llm.model_name,
+                    call_type=call_type,
+                    llm_latency_ms=llm_resp.llm_latency_ms,
+                    cache_hit=llm_resp.cache_hit,
+                    prompt_tokens=llm_resp.prompt_tokens,
+                    completion_tokens=llm_resp.completion_tokens,
+                    finish_reason=llm_resp.finish_reason,
+                    retry_count=getattr(llm_resp, "retry_count", 0),
+                    retry_wait_ms=getattr(llm_resp, "retry_wait_ms", 0.0),
+                    tools_requested=[tc["name"] for tc in llm_resp.tool_calls],
+                    question=user_question,
+                    case_id=case_id,
+                )
 
             # If model produced direct answer and no tool calls, we're done!
             if not llm_resp.tool_calls:
@@ -103,6 +140,7 @@ class ReActAgent:
 
             # Handle each requested tool call
             for tc in llm_resp.tool_calls:
+                n_tool_calls += 1
                 tool_name = tc["name"]
                 tool_args = tc.get("arguments", {})
                 tool_call_id = tc.get("id", f"call_{step}")
@@ -201,6 +239,8 @@ class ReActAgent:
                     blocked_by_defense=defense_block_reason
                 ))
 
+                total_tool_ms += call_duration_ms
+
                 # Append assistant tool call & tool result message to conversation history
                 messages.append({
                     "role": "assistant",
@@ -231,6 +271,11 @@ class ReActAgent:
                 total_latency_ms=total_elapsed,
                 question=user_question,
                 case_id=case_id,
+                n_tool_calls=n_tool_calls,
+                n_llm_calls=n_llm_calls,
+                llm_latency_ms=total_llm_ms,
+                tool_latency_ms=total_tool_ms,
+                retry_wait_ms=total_retry_wait_ms,
             )
 
         return AgentRunResult(
@@ -240,5 +285,10 @@ class ReActAgent:
             tool_calls=tool_records,
             total_latency_ms=total_elapsed,
             completed=bool(final_answer),
-            error_message=None if final_answer else f"Reached max steps ({self.max_steps}) without conclusion."
+            error_message=None if final_answer else f"Reached max steps ({self.max_steps}) without conclusion.",
+            n_llm_calls=n_llm_calls,
+            n_tool_calls=n_tool_calls,
+            llm_latency_ms=total_llm_ms,
+            tool_latency_ms=total_tool_ms,
+            retry_wait_ms=total_retry_wait_ms,
         )

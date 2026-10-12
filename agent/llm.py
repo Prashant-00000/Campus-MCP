@@ -66,6 +66,8 @@ class LLMResponse:
         prompt_tokens: Optional[int] = None,
         completion_tokens: Optional[int] = None,
         finish_reason: Optional[str] = None,
+        retry_count: int = 0,
+        retry_wait_ms: float = 0.0,
     ):
         self.content = content
         self.tool_calls = tool_calls or []
@@ -77,12 +79,15 @@ class LLMResponse:
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
         self.finish_reason = finish_reason
+        self.retry_count = retry_count
+        self.retry_wait_ms = retry_wait_ms
 
     def __repr__(self) -> str:
         return (
             f"LLMResponse(model={self.model!r}, provider={self.provider!r}, "
             f"tool_calls={len(self.tool_calls)}, content_len={len(self.content or '')}, "
-            f"latency_ms={self.llm_latency_ms}, cache_hit={self.cache_hit})"
+            f"latency_ms={self.llm_latency_ms}, cache_hit={self.cache_hit}, "
+            f"retries={self.retry_count})"
         )
 
 
@@ -156,7 +161,7 @@ class LLMProvider:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         enable_cache: bool = True,
-        max_retries: int = 3,
+        max_retries: int = 6,
         timeout_s: float = 60.0,
     ):
         self.model_name = model_name
@@ -318,6 +323,8 @@ class LLMProvider:
             payload["tool_choice"] = "auto"
 
         last_exc: Optional[Exception] = None
+        total_retry_wait_ms = 0.0
+        retry_count = 0
 
         for attempt in range(self.max_retries):
             try:
@@ -368,6 +375,8 @@ class LLMProvider:
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                     finish_reason=finish_reason,
+                    retry_count=retry_count,
+                    retry_wait_ms=round(total_retry_wait_ms, 2),
                 )
 
             except MalformedToolCallError:
@@ -375,19 +384,28 @@ class LLMProvider:
 
             except Exception as exc:
                 last_exc = exc
+                retry_count += 1
+                err_body = ""
                 wait = 2 ** attempt
-                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
-                    retry_after = exc.response.headers.get("retry-after")
-                    if retry_after and retry_after.isdigit():
-                        wait = max(int(retry_after) + 1, wait)
-                    else:
-                        wait = max(5 * (attempt + 1), wait)
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+                    try:
+                        err_body = f" [body: {exc.response.text[:200]}]"
+                    except Exception:
+                        pass
+                    if exc.response.status_code == 429:
+                        retry_after = exc.response.headers.get("retry-after")
+                        if retry_after and retry_after.isdigit():
+                            wait = max(int(retry_after) + 1, wait)
+                        else:
+                            wait = max(7 * (attempt + 1), wait)
 
+                total_retry_wait_ms += wait * 1000
                 log.warning(
-                    "LLM call attempt %d/%d failed (%s). Retrying in %ds…",
+                    "LLM call attempt %d/%d failed (%s%s). Retrying in %ds…",
                     attempt + 1,
                     self.max_retries,
                     exc,
+                    err_body,
                     wait,
                 )
                 time.sleep(wait)

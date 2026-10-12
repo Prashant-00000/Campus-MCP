@@ -1,0 +1,7 @@
+case_id,split,category,trial,model,provider,temperature,git_commit,run_timestamp,tool_selection_ok,argument_ok,task_success,failure_type,n_tool_calls,n_llm_calls,llm_latency_ms,tool_latency_ms,retry_wait_ms,total_latency_ms
+case_08,dev,single-tool,1,openai/gpt-oss-20b,groq,0.0,acf752c,2026-10-12T05:28:24.020560+00:00,True,True,False,right_tools_wrong_answer,2,3,5289.16,12.82,15000.0,21259.7
+case_08,dev,single-tool,2,openai/gpt-oss-20b,groq,0.0,acf752c,2026-10-12T05:28:53.860856+00:00,True,True,False,right_tools_wrong_answer,2,3,3954.65,5.35,24000.0,29837.56
+case_08,dev,single-tool,3,openai/gpt-oss-20b,groq,0.0,acf752c,2026-10-12T05:29:15.781599+00:00,True,True,False,right_tools_wrong_answer,2,3,4142.75,3.69,16000.0,21918.74
+case_12,dev,multi-tool,1,openai/gpt-oss-20b,groq,0.0,acf752c,2026-10-12T05:33:21.814145+00:00,True,True,False,right_tools_wrong_answer,4,5,7740.25,14.03,11000.0,21245.92
+case_12,dev,multi-tool,2,openai/gpt-oss-20b,groq,0.0,acf752c,2026-10-12T05:34:22.012265+00:00,True,True,False,right_tools_wrong_answer,5,6,8719.38,9.6,48000.0,60195.97
+case_12,dev,multi-tool,3,openai/gpt-oss-20b,groq,0.0,acf752c,2026-10-12T05:34:59.549982+00:00,True,True,False,right_tools_wrong_answer,4,5,8277.33,4.85,25000.0,37535.2
