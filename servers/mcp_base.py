@@ -309,3 +309,11 @@ class MCPServer:
                 sys.stdout.flush()
             except Exception as e:
                 logger.exception(f"Unhandled server error: {e}")
+                if isinstance(req, dict) and "id" in req:
+                    err_resp = {
+                        "jsonrpc": "2.0",
+                        "id": req.get("id"),
+                        "error": {"code": -32603, "message": "Internal server error"}
+                    }
+                    sys.stdout.write(json.dumps(err_resp) + "\n")
+                    sys.stdout.flush()

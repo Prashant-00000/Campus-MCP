@@ -13,6 +13,7 @@ import sys
 import json
 import subprocess
 import time
+import argparse
 from tabulate import tabulate
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,26 +31,46 @@ def run_step(step_num: int, title: str, cmd_args: list):
         sys.exit(res.returncode)
     print(f"\n>>> Step {step_num} completed successfully in {elapsed}s.")
 
+def run_offline(py_exe):
+    run_step(1, "Run Unit & Security Tests (offline)", [py_exe, "-m", "pytest", "-q"])
+    run_step(2, "Rescore Stored Results (Grader v1/v2/v3)", [py_exe, "scripts/rescore_offline.py"])
+    run_step(3, "Regenerate README Metrics From Stored CSVs", [py_exe, "scripts/update_readme_metrics.py"])
+
+
+def run_live(py_exe):
+    estimated_calls = (52 * 3 * 2) + (32 * 6)
+    estimated_tokens = estimated_calls * 1700
+    print(f"Live mode will make approximately {estimated_calls} model calls (~{estimated_tokens:,} prompt tokens before completions).")
+    answer = input("Continue with live API calls? [y/N] ").strip().lower()
+    if answer not in ("y", "yes"):
+        print("Live run cancelled.")
+        return
+
+    run_step(1, "Initialize Databases (College, DB, GitHub)", [py_exe, "data/init_databases.py"])
+    run_step(2, "Run Unit & Security Tests (pytest)", [py_exe, "-m", "pytest", "-v"])
+    run_step(3, "Run 2-Model Evaluation Benchmark (Test split, 3 trials)", [py_exe, "scripts/run_eval.py"])
+    run_step(4, "Run Red-Team Ablations, Adaptive Attacks & Utility Re-Check", [py_exe, "scripts/run_redteam.py"])
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Reproduce offline artifacts or run live model experiments.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--offline", action="store_true", help="Run tests, offline rescoring, and README metric generation.")
+    mode.add_argument("--live", action="store_true", help="Run API-backed evaluation and red-team experiments after confirmation.")
+    args = parser.parse_args()
+
+    py_exe = sys.executable
+    if not args.live:
+        run_offline(py_exe)
+        return
+
     print("""
 ==============================================================================
        3-SERVER MCP AGENT: BENCHMARK, RED-TEAM & REPRODUCTION PIPELINE
 ==============================================================================
     """)
 
-    py_exe = sys.executable
-
-    # Step 1: Initialize Databases
-    run_step(1, "Initialize Databases (College, DB, GitHub)", [py_exe, "data/init_databases.py"])
-
-    # Step 2: Run Unit Tests
-    run_step(2, "Run Unit & Security Tests (pytest)", [py_exe, "-m", "pytest", "-v"])
-
-    # Step 3: Run 2-Model Benchmark
-    run_step(3, "Run 2-Model Evaluation Benchmark (Test Split, 3 Trials)", [py_exe, "scripts/run_eval.py"])
-
-    # Step 4: Run Red Team Ablation Suite
-    run_step(4, "Run Red-Team Ablations, Adaptive Attacks & Utility Re-Check", [py_exe, "scripts/run_redteam.py"])
+    run_live(py_exe)
 
     print("\n" + "=" * 78)
     print("ALL PIPELINE STEPS COMPLETED. VERIFYING DEFENSE CLAIMS")

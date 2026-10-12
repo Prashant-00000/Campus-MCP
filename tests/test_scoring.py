@@ -113,3 +113,32 @@ def test_provenance_v1_vs_v2():
     facts = ["2026-11-02"]
     assert not check_facts_present_v1(ans, facts)
     assert check_facts_present(ans, facts)
+
+
+def test_stronger_dev_case_facts_reject_weak_answers():
+    assert check_facts_present(
+        "CS201 Data Structures & Algorithms",
+        ["CS201", "Data Structures", "Algorithms"],
+    )
+    assert not check_facts_present(
+        "CS201 Algorithms",
+        ["CS201", "Data Structures", "Algorithms"],
+    )
+
+    assert check_facts_present(
+        "products: price REAL; stock_quantity INTEGER",
+        ["products", "price", "stock_quantity"],
+    )
+    assert not check_facts_present(
+        "the table has price and stock_quantity columns",
+        ["products", "price", "stock_quantity"],
+    )
+
+    assert check_facts_present(
+        "Dr. Alan Turing, Professor & Chair, Theory of Computation",
+        ["Alan Turing", "Professor & Chair", "Theory of Computation"],
+    )
+    assert not check_facts_present(
+        "Dr. Alan Turing is faculty",
+        ["Alan Turing", "Professor & Chair", "Theory of Computation"],
+    )

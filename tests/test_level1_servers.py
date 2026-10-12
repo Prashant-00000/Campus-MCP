@@ -14,13 +14,14 @@ import json
 from data.init_databases import init_college_db, init_company_db, init_github_db
 from servers.college_server import server as college_server
 from servers.db_server import server as db_server
-from servers.github_server import server as github_server
+from servers.github_server import server as github_server, set_writes_enabled
 
 @pytest.fixture(scope="module", autouse=True)
 def setup_databases():
     init_college_db()
     init_company_db()
     init_github_db()
+    set_writes_enabled(True)
 
 # =========================================================================
 # LEVEL 1: COLLEGE SERVER

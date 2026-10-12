@@ -3,15 +3,31 @@
 > **The Resume Headline:**  
 > *"Built a 3-server MCP agent, measured tool-selection and task accuracy across 2 models, red-teamed it, and cut attack success from X% to Y% (with confidence intervals) at a utility cost of Z%."*
 
-Every number in this repository is backed by raw execution logs, pinned environments, and a single reproduction command:
+Every number in this repository is backed by raw execution logs and pinned environments. Reproduce stored results without API calls:
 ```bash
-python scripts/reproduce.py
+python scripts/reproduce.py --offline
+```
+
+For new model measurements, use explicit live mode. It estimates request volume and asks for confirmation before making API calls:
+```bash
+python scripts/reproduce.py --live
 ```
 
 > **Note on Live vs. Simulated Metrics:**  
 > Historical simulator artifacts are archived in `results/_simulated/`. To generate live benchmark and ablation metrics for your configured real models, run `python scripts/run_eval.py` and `python scripts/run_redteam.py`. The tables below will be populated with live numbers.
 
+The MCP transport in this repository is a small custom JSON-RPC-over-stdio layer rather than the official MCP SDK. It is covered by protocol tests and intended for local evaluation and Inspector-style integration.
+
 ---
+
+<!-- GENERATED_METRICS_START -->
+### Stored Benchmark Artifacts
+Generated from CSV files currently present under `results/`; argument accuracy uses specified-argument cases only. Legacy CSVs predate Grader v3 fields and are labeled accordingly.
+
+| Model | Split | Tool Selection Gate | Argument Accuracy | Task Success |
+| :--- | :--- | :---: | :---: | :---: |
+| openai/gpt-oss-20b | dev | 42/42 (100.0%) [legacy CSV] | N/A | 27/42 (64.3%) |
+<!-- GENERATED_METRICS_END -->
 
 ## 1. Key Empirical Results
 
@@ -130,12 +146,11 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Reproduce All Empirical Results
-Run the master reproduction script in zero-cost offline simulation mode:
+### Reproduce Stored Results Offline
 ```bash
-python scripts/reproduce.py
+python scripts/reproduce.py --offline
 ```
-This automatically initializes the databases, executes the 15-test unit suite, runs the 2-model benchmark across 63 trials, performs the 32-attack red-team ablation, executes the adaptive attack round, and logs results in `results/`.
+This runs the current unit suite, re-scores stored audit logs with Graders v1/v2/v3, and regenerates the stored-metrics section from CSV artifacts. It makes no model calls.
 
 ### Running Against Live Models (OpenAI, Groq, OpenRouter)
 Copy `.env.example` to `.env` (guaranteed ignored in `.gitignore`):
@@ -147,8 +162,9 @@ Configure your keys in `.env`:
 MCP_AGENT_MODE=live
 OPENAI_API_KEY=sk-...
 MODEL_A_PROVIDER=openai
-MODEL_A_NAME=gpt-4o-mini
+MODEL_A_MODEL=gpt-4o-mini
 ```
+Then run `python scripts/reproduce.py --live`; the command estimates request volume and asks for confirmation before starting.
 
 ---
 

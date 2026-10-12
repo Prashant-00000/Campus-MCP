@@ -86,12 +86,12 @@ def run_both_models():
             [
                 model_a, provider_a,
                 res_a["tool_selection_ci"], res_a["task_success_ci"],
-                res_a["avg_steps"], f"{res_a['avg_latency_ms']} ms"
+                res_a["avg_tool_calls"], f"{res_a['avg_llm_latency_ms']} ms"
             ],
             [
                 model_b, provider_b,
                 res_b["tool_selection_ci"], res_b["task_success_ci"],
-                res_b["avg_steps"], f"{res_b['avg_latency_ms']} ms"
+                res_b["avg_tool_calls"], f"{res_b['avg_llm_latency_ms']} ms"
             ],
         ]
         print("\n" + "=" * 70)

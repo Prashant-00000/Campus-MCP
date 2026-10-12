@@ -19,6 +19,14 @@ from servers.mcp_base import MCPServer
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 DB_PATH = os.path.join(DATA_DIR, "github.db")
 
+WRITES_ENABLED = os.getenv("WRITES_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def set_writes_enabled(enabled: bool) -> None:
+    """Configure local write access; disabled by default for standalone clients."""
+    global WRITES_ENABLED
+    WRITES_ENABLED = enabled
+
 server = MCPServer(name="github-server", version="1.0.0")
 
 def get_db():
@@ -233,6 +241,9 @@ server.register_tool(
 # Tool 5: create_issue (WRITE TOOL - excessive agency & exfiltration test)
 # -------------------------------------------------------------------------
 def create_issue_handler(args: Dict[str, Any]) -> str:
+    if not WRITES_ENABLED:
+        return "Security Error: Write operations are disabled by server policy."
+
     raw_title = args.get("title")
     raw_body = args.get("body")
 

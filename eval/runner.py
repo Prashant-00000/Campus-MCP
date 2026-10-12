@@ -12,6 +12,8 @@ import os
 import json
 import csv
 import time
+import re
+from collections import Counter
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 try:
@@ -31,6 +33,7 @@ from data.init_databases import init_college_db, init_company_db, init_github_db
 from eval.stats import wilson_score_interval, format_ci
 
 DATASET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset.jsonl")
+GRADER_VERSION = "v3"
 RESULTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -78,7 +81,7 @@ class EvalHarness:
         return cases
 
     def grade_case(self, case: Dict[str, Any], agent_result) -> Dict[str, Any]:
-        """Grades a single agent run against the ground truth rules using robust normalization."""
+        """Grade a run with strict tool precision/recall and explicit-arg scoring."""
         from eval.scoring import normalize_text, check_facts_present
 
         called_tools = [tc.tool_name for tc in agent_result.tool_calls]
@@ -88,62 +91,98 @@ class EvalHarness:
         raw_ans = agent_result.final_answer or ""
         norm_answer = normalize_text(raw_ans)
 
-        # 1. Tool Selection Accuracy
-        if not expected_tools:
-            tool_selection_ok = (len(called_tools) == 0)
-        else:
-            tool_selection_ok = all(t in called_tools for t in expected_tools)
+        expected_counts = Counter(expected_tools)
+        called_counts = Counter(called_tools)
+        matched_calls = sum(min(called_counts.get(tool, 0), count) for tool, count in expected_counts.items())
+        extra_calls = max(0, len(called_tools) - matched_calls)
 
-        # 2. Argument Accuracy
+        def call_signature(tool_call):
+            def normalize_value(value):
+                if isinstance(value, dict):
+                    return {key: normalize_value(value[key]) for key in sorted(value)}
+                if isinstance(value, list):
+                    return [normalize_value(item) for item in value]
+                return normalize_text(str(value)) if isinstance(value, str) else value
+            return tool_call.tool_name, json.dumps(normalize_value(tool_call.arguments), sort_keys=True)
+
+        call_signatures = Counter(call_signature(tc) for tc in agent_result.tool_calls)
+        redundant_calls = sum(max(0, count - 1) for count in call_signatures.values())
+
+        # Precision and recall are reported separately so extra calls are visible.
+        tool_precision = matched_calls / len(called_tools) if called_tools else (1.0 if not expected_tools else 0.0)
+        tool_recall = matched_calls / len(expected_tools) if expected_tools else (1.0 if not called_tools else 0.0)
+        tool_selection_ok = tool_precision == 1.0 and tool_recall == 1.0
+
+        # 2. Argument Accuracy: only cases with declared arguments contribute.
+        specified_arg_checks = 0
+        correct_arg_checks = 0
+        missing_args = 0
         arg_ok = True
-        if expected_args and tool_selection_ok:
-            for tc in agent_result.tool_calls:
-                actual_args = tc.arguments
-                for k, exp_val in expected_args.items():
-                    if k in actual_args:
-                        actual_val = normalize_text(str(actual_args[k]))
-                        exp_val_norm = normalize_text(str(exp_val))
-                        if exp_val_norm not in actual_val:
-                            arg_ok = False
-        elif expected_tools and not tool_selection_ok:
+        if expected_args:
+            expected_tool = expected_tools[0] if len(set(expected_tools)) == 1 else None
+            matching_records = [tc for tc in agent_result.tool_calls if expected_tool is None or tc.tool_name == expected_tool]
+            for key, expected_value in expected_args.items():
+                specified_arg_checks += 1
+                actual_values = [tc.arguments.get(key) for tc in matching_records if key in tc.arguments]
+                expected_norm = normalize_text(str(expected_value))
+                if not actual_values:
+                    missing_args += 1
+                    arg_ok = False
+                elif all(
+                    expected_norm == normalize_text(str(actual))
+                    or bool(re.search(rf"\b{re.escape(expected_norm)}\b", normalize_text(str(actual))))
+                    for actual in actual_values
+                ):
+                    correct_arg_checks += 1
+                else:
+                    arg_ok = False
+        arg_accuracy = (correct_arg_checks / specified_arg_checks) if specified_arg_checks else None
+        if expected_tools and not tool_selection_ok:
             arg_ok = False
 
-        # 3. Task Success
-        task_success = False
+        # 3. Separate answer correctness from tool-use quality.
+        answer_correct = False
         failure_type = "none"
         is_impossible = case.get("impossible", False)
 
         if is_impossible:
             # Must state impossibility / inability
             if any(term in norm_answer for term in ["cannot", "impossible", "predict", "not available", "unknown"]):
-                task_success = True
+                answer_correct = True
             else:
                 failure_type = "right_tools_wrong_answer"
         elif not expected_tools:
             # Direct answer check using unicode-aware normalization
             if check_facts_present(raw_ans, required_facts):
-                task_success = True
+                answer_correct = True
             else:
                 failure_type = "right_tools_wrong_answer" if len(called_tools) == 0 else "wrong_tool"
         else:
             # Must have called tool and include required facts
             facts_present = check_facts_present(raw_ans, required_facts)
-            if tool_selection_ok and arg_ok and facts_present:
-                task_success = True
-            else:
-                if not tool_selection_ok:
-                    failure_type = "wrong_tool"
-                elif not arg_ok:
-                    failure_type = "wrong_args"
-                else:
-                    failure_type = "right_tools_wrong_answer"
+            answer_correct = facts_present
+            if not answer_correct:
+                failure_type = "right_tools_wrong_answer"
 
         if not agent_result.completed:
             failure_type = "loop" if agent_result.steps_taken >= 10 else "gave_up"
+            answer_correct = False
+
+        tool_use_quality = tool_selection_ok and arg_ok and agent_result.completed
+        task_success = answer_correct
 
         return {
             "tool_selection_ok": tool_selection_ok,
+            "tool_precision": tool_precision,
+            "tool_recall": tool_recall,
+            "extra_calls": extra_calls,
+            "redundant_calls": redundant_calls,
+            "missing_args": missing_args,
             "argument_ok": arg_ok,
+            "argument_accuracy": arg_accuracy,
+            "argument_checks": specified_arg_checks,
+            "answer_correct": answer_correct,
+            "tool_use_quality": tool_use_quality,
             "task_success": task_success,
             "failure_type": failure_type,
             "steps": agent_result.steps_taken,
@@ -192,8 +231,11 @@ class EvalHarness:
 
         fieldnames = [
             "case_id", "split", "category", "trial", "model", "provider",
+            "grader_version",
             "temperature", "git_commit", "run_timestamp",
-            "tool_selection_ok", "argument_ok", "task_success", "failure_type",
+            "tool_selection_ok", "tool_precision", "tool_recall", "extra_calls", "redundant_calls",
+            "missing_args", "argument_ok", "argument_accuracy", "argument_checks",
+            "answer_correct", "tool_use_quality", "task_success", "failure_type",
             "n_tool_calls", "n_llm_calls", "llm_latency_ms", "tool_latency_ms",
             "retry_wait_ms", "total_latency_ms"
         ]
@@ -243,11 +285,21 @@ class EvalHarness:
                         "trial": trial_idx,
                         "model": self.model_name,
                         "provider": self.provider,
+                        "grader_version": GRADER_VERSION,
                         "temperature": getattr(agent, "temperature", 0.0),
                         "git_commit": git_commit,
                         "run_timestamp": datetime.now(timezone.utc).isoformat(),
                         "tool_selection_ok": graded["tool_selection_ok"],
+                        "tool_precision": graded["tool_precision"],
+                        "tool_recall": graded["tool_recall"],
+                        "extra_calls": graded["extra_calls"],
+                        "redundant_calls": graded["redundant_calls"],
+                        "missing_args": graded["missing_args"],
                         "argument_ok": graded["argument_ok"],
+                        "argument_accuracy": graded["argument_accuracy"],
+                        "argument_checks": graded["argument_checks"],
+                        "answer_correct": graded["answer_correct"],
+                        "tool_use_quality": graded["tool_use_quality"],
                         "task_success": graded["task_success"],
                         "failure_type": graded["failure_type"],
                         "n_tool_calls": res.n_tool_calls,
@@ -270,14 +322,15 @@ class EvalHarness:
             return {"error": "No evaluations completed"}
 
         tool_successes = sum(1 for r in records if str(r.get("tool_selection_ok")).lower() == "true")
-        arg_successes = sum(1 for r in records if str(r.get("argument_ok")).lower() == "true")
+        arg_records = [r for r in records if int(r.get("argument_checks", 0) or 0) > 0]
+        arg_successes = sum(1 for r in arg_records if str(r.get("argument_ok")).lower() == "true")
         task_successes = sum(1 for r in records if str(r.get("task_success")).lower() == "true")
         total_tool_calls = sum(int(r.get("n_tool_calls", 0)) for r in records)
         total_llm_calls = sum(int(r.get("n_llm_calls", 0)) for r in records)
         total_llm_latency = sum(float(r.get("llm_latency_ms", 0.0)) for r in records)
 
         tool_ci = format_ci(tool_successes, total_evals)
-        arg_ci = format_ci(arg_successes, total_evals)
+        arg_ci = format_ci(arg_successes, len(arg_records))
         task_ci = format_ci(task_successes, total_evals)
         avg_tool_calls = round(total_tool_calls / total_evals, 2)
         avg_llm_calls = round(total_llm_calls / total_evals, 2)
@@ -291,7 +344,7 @@ class EvalHarness:
         summary_data = [
             ["Metric", "Value", "Wilson 95% Confidence Interval"],
             ["Tool Selection Accuracy", f"{round(tool_successes/total_evals*100, 1)}%", extract_ci_brackets(tool_ci)],
-            ["Argument Accuracy", f"{round(arg_successes/total_evals*100, 1)}%", extract_ci_brackets(arg_ci)],
+            ["Argument Accuracy (specified args only)", f"{round(arg_successes/len(arg_records)*100, 1) if arg_records else 'N/A'}%", extract_ci_brackets(arg_ci)],
             ["Task Success Rate", f"{round(task_successes/total_evals*100, 1)}%", extract_ci_brackets(task_ci)],
             ["Avg Tool Calls / Task", f"{avg_tool_calls}", "N/A"],
             ["Avg LLM Calls / Task", f"{avg_llm_calls}", "N/A"],
@@ -322,7 +375,7 @@ class EvalHarness:
             "total_runs": total_evals,
             "tool_selection_accuracy": round(tool_successes / total_evals * 100, 1),
             "tool_selection_ci": tool_ci,
-            "argument_accuracy": round(arg_successes / total_evals * 100, 1),
+            "argument_accuracy": round(arg_successes / len(arg_records) * 100, 1) if arg_records else None,
             "argument_ci": arg_ci,
             "task_success_rate": round(task_successes / total_evals * 100, 1),
             "task_success_ci": task_ci,

@@ -20,6 +20,7 @@ from agent.defenses import (
     HARDENED_SYSTEM_PROMPT_ADDENDUM
 )
 from servers.db_server import validate_sql_query
+from servers.github_server import set_writes_enabled
 
 DEFAULT_SYSTEM_PROMPT = """
 You are a helpful, precise AI assistant equipped with Model Context Protocol (MCP) tools.
@@ -69,6 +70,9 @@ class ReActAgent:
         self.audit_logger = audit_logger
         self.max_steps = max_steps
         self.temperature = temperature
+        # Keep baseline ablations capable of writes while making standalone
+        # MCP server access deny writes by default.
+        set_writes_enabled(not self.defenses.deterministic_write_guard)
 
     def run(self, user_question: str, case_id: Optional[str] = None) -> AgentRunResult:
         """Executes the ReAct loop until final answer is obtained or max_steps reached."""

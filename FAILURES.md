@@ -185,3 +185,15 @@ The retry logic executed `wait = max(int(retry_after) + 1, wait)`, causing the p
 
 **Fix:**
 Cap `retry-after` at 120 seconds. If an endpoint requests a backoff exceeding 2 minutes, terminate immediately with a descriptive message (`"Daily quota exhausted (TPD). Run is resumable: restart after reset window."`) rather than sleeping silently.
+
+## Failure 7: Lenient Tool and Argument Metrics Inflated Accuracy
+
+**Date:** 2026-10-12
+
+**What happened:** Grader v2 treated a missing declared argument as correct and considered tool selection successful whenever every expected tool appeared somewhere in the trace. Extra calls, duplicate calls, and incomplete ten-step loops could therefore retain a passing tool or argument score. Argument accuracy also included cases with `expected_args: {}`, where no argument was actually evaluated.
+
+**Root Cause:** The evaluator used membership checks instead of comparing the observed call multiset with the expected call multiset, and it initialized argument accuracy to `True` before checking whether any declared argument existed.
+
+**Fix:** Grader v3 now reports strict tool precision and recall, `extra_calls`, `redundant_calls`, and N/A argument accuracy for unspecified arguments. Missing or mismatched declared arguments fail, while answer correctness is reported separately from tool-use quality. Offline rescoring of the stored 42-trial artifact found v3 answer correctness at 39/42 (matching v2), tool-use quality at 36/42, 30 extra calls, and 5 truly redundant calls. The earlier 33/42 and 30-redundant figures were caused by conflating tool quality with answer correctness and counting repeated tool names rather than identical calls.
+
+**Lesson:** A metric that cannot fail is not evidence of capability. Tool efficiency and argument coverage must be measured independently from final-answer correctness.

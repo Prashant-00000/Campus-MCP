@@ -399,6 +399,13 @@ class LLMProvider:
                         else:
                             wait = max(7 * (attempt + 1), wait)
 
+                        if wait > 120:
+                            reset_time = time.strftime("%H:%M:%S", time.localtime(time.time() + wait))
+                            raise RuntimeError(
+                                f"Daily rate-limit ceiling reached (Retry-After: {wait}s > 120s limit). "
+                                f"Terminating cleanly to avoid silent hang. Run is resumable after {reset_time}."
+                            )
+
                 total_retry_wait_ms += wait * 1000
                 log.warning(
                     "LLM call attempt %d/%d failed (%s%s). Retrying in %ds…",

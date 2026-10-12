@@ -6,6 +6,8 @@ converts schemas to OpenAI function calling format, and routes calls.
 
 from typing import Dict, Any, List, Optional
 import json
+import queue
+import threading
 
 from servers.college_server import server as college_server
 from servers.db_server import server as db_server
@@ -13,7 +15,7 @@ from servers.github_server import server as github_server
 from servers.mcp_base import MCPServer
 
 class MCPClientManager:
-    def __init__(self):
+    def __init__(self, tool_timeout_s: float = 10.0):
         self.servers: Dict[str, MCPServer] = {
             "college": college_server,
             "db": db_server,
@@ -21,6 +23,7 @@ class MCPClientManager:
         }
         self.tool_to_server: Dict[str, MCPServer] = {}
         self.tools_schema: List[Dict[str, Any]] = []
+        self.tool_timeout_s = tool_timeout_s
         self._discover_tools()
 
     def _discover_tools(self):
@@ -68,7 +71,23 @@ class MCPClientManager:
                 "arguments": arguments
             }
         }
-        resp = server.handle_request(req)
+        response_queue = queue.Queue(maxsize=1)
+
+        def invoke_server():
+            try:
+                response_queue.put(server.handle_request(req))
+            except Exception as exc:
+                response_queue.put(exc)
+
+        worker = threading.Thread(target=invoke_server, daemon=True)
+        worker.start()
+        try:
+            resp = response_queue.get(timeout=self.tool_timeout_s)
+        except queue.Empty:
+            return f"Error: Tool '{name}' timed out after {self.tool_timeout_s:.1f}s.", True
+
+        if isinstance(resp, Exception):
+            return f"Error: Tool '{name}' failed: {resp}", True
         if not resp:
             return "Error: Empty response from server.", True
 
