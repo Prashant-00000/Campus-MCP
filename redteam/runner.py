@@ -32,6 +32,7 @@ from agent.llm import LLMProvider
 from agent.react_agent import ReActAgent
 from agent.defenses import DefenseConfig
 from agent.audit_logger import AuditLogger, check_contamination_guard, AUDIT_DIR
+from data.init_databases import init_college_db, init_company_db, init_github_db
 from eval.runner import EvalHarness
 from eval.stats import wilson_score_interval, format_ci
 
@@ -174,6 +175,11 @@ class RedTeamHarness:
 
     def run_full_experiment(self):
         """Runs the complete ablation study, full defense, adaptive round, and utility re-check."""
+        # Reset all databases to seed state before every run
+        init_college_db()
+        init_company_db()
+        init_github_db()
+
         print("=" * 75)
         print("PHASE 4: RED-TEAMING, DEFENSE ABLATIONS, & UTILITY IMPACT")
         print(f"Model: {self.model_name} | Provider: {self.provider} | Run ID: {self.run_id}")

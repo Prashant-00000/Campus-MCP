@@ -27,6 +27,7 @@ from agent.llm import LLMProvider
 from agent.react_agent import ReActAgent
 from agent.defenses import DefenseConfig
 from agent.audit_logger import AuditLogger, check_contamination_guard, AUDIT_DIR
+from data.init_databases import init_college_db, init_company_db, init_github_db
 from eval.stats import wilson_score_interval, format_ci
 
 DATASET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset.jsonl")
@@ -112,6 +113,7 @@ class EvalHarness:
         # 3. Task Success
         task_success = False
         failure_type = "none"
+        is_impossible = case.get("impossible", False)
 
         if is_impossible:
             # Must state impossibility / inability
@@ -156,6 +158,11 @@ class EvalHarness:
         output_csv_name: Optional[str] = None,
         run_id: Optional[str] = None
     ) -> Dict[str, Any]:
+        # Reset all databases to seed state before every run
+        init_college_db()
+        init_company_db()
+        init_github_db()
+
         cases = self.load_dataset(split=split)
 
         # 1. Determine run ID and output paths
