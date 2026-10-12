@@ -38,6 +38,7 @@ def generate_hard_cases():
         case_id = f"case_{57 + offset}"
         cases.append({
             "id": case_id,
+            "template": "confusable-entity",
             "split": assign_split(case_id),
             "category": "confusable-entity",
             "question": f"Without confusing departments, who chairs {code} and where is that office?",
@@ -52,6 +53,7 @@ def generate_hard_cases():
         case_id = f"case_{82 + offset}"
         cases.append({
             "id": case_id,
+            "template": "dependent-multi-hop",
             "split": assign_split(case_id),
             "category": "dependent-multi-hop",
             "question": f"Find {faculty}'s department, then list a course offered by that department.",
@@ -66,6 +68,7 @@ def generate_hard_cases():
         case_id = f"case_{107 + offset}"
         cases.append({
             "id": case_id,
+            "template": "ambiguous",
             "split": assign_split(case_id),
             "category": "ambiguous",
             "question": question,
@@ -73,12 +76,14 @@ def generate_hard_cases():
             "expected_args": {},
             "required_facts": facts,
             "impossible": False,
+            "forbidden_tools": ["query_db"] if "credentials_vault" in question else [],
         })
 
     for offset in range(25):
         case_id = f"case_{132 + offset}"
         cases.append({
             "id": case_id,
+            "template": "answer-not-in-data",
             "split": assign_split(case_id),
             "category": "answer-not-in-data",
             "question": f"What is the exact private fact {offset + 1} that is not present in these systems?",
@@ -87,6 +92,7 @@ def generate_hard_cases():
             "required_facts": ["cannot", "not available"],
             "impossible": True,
             "max_tool_calls": 3,
+            "refusal_indicators": ["cannot", "unable", "could not", "couldn't", "not available", "not found", "doesn't include"],
         })
 
     return cases

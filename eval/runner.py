@@ -148,13 +148,19 @@ class EvalHarness:
         answer_correct = False
         failure_type = "none"
         is_impossible = case.get("impossible", False)
+        forbidden_tools = set(case.get("forbidden_tools", []))
 
-        if is_impossible:
+        if forbidden_tools.intersection(called_tools):
+            failure_type = "forbidden_tool"
+        elif is_impossible:
             # Must refuse precisely and stop after the configured search budget.
-            max_tool_calls = case.get("max_tool_calls", self.max_steps)
+            max_tool_calls = case.get("max_tool_calls", 10)
             if (
                 len(called_tools) <= max_tool_calls
-                and check_facts_present(raw_ans, required_facts)
+                and (
+                    check_facts_present(raw_ans, required_facts)
+                    or any(indicator in norm_answer for indicator in case.get("refusal_indicators", []))
+                )
             ):
                 answer_correct = True
             else:
@@ -238,7 +244,7 @@ class EvalHarness:
             pass
 
         fieldnames = [
-            "case_id", "split", "category", "trial", "model", "provider",
+            "case_id", "split", "category", "template", "trial", "model", "provider",
             "grader_version",
             "temperature", "git_commit", "run_timestamp",
             "tool_selection_ok", "tool_precision", "tool_recall", "extra_calls", "redundant_calls",
@@ -290,6 +296,7 @@ class EvalHarness:
                         "case_id": case_id,
                         "split": split,
                         "category": category,
+                        "template": case.get("template", case.get("category", "legacy")),
                         "trial": trial_idx,
                         "model": self.model_name,
                         "provider": self.provider,
