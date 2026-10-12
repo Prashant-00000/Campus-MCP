@@ -22,5 +22,15 @@ def test_faithfulness_flags_unsupported_specific_claims():
     assert result["unsupported_claim_rate"] > 0
 
 
+def test_faithfulness_normalizes_numbers_underscores_and_weekdays():
+    answer = "Revenue was $19,498.00. Product ID 503 was highest on Monday & Wednesday."
+    evidence = [
+        "total_revenue: 19498.0; product_id: 503; office_hours: Mon/Wed 2-4 PM"
+    ]
+
+    result = assess_faithfulness(answer, evidence)
+    assert result["unsupported_claims"] == []
+
+
 def test_claim_extraction_deduplicates_tokens():
     assert set(extract_claim_tokens("Room 401, then room 401; email a@b.co")) == {"401", "a@b.co"}

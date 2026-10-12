@@ -112,7 +112,7 @@ def run_rescore():
         v3 = offline_harness.grade_case(case_def, v3_result)
         faithfulness = assess_faithfulness(
             raw_ans,
-            [tool.get("result_preview", "") for tool in session["tools"] if not tool.get("is_error")],
+            [tool.get("result_full", tool.get("result_preview", "")) for tool in session["tools"] if not tool.get("is_error")],
         )
 
         if success_v1:

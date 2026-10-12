@@ -49,6 +49,7 @@ def test_react_agent_single_tool(tmp_path):
     assert tool_records[0]["model"] == "model-a-simulator"
     assert "tool_latency_ms" in tool_records[0]
     assert "result_preview" in tool_records[0]
+    assert "result_full" in tool_records[0]
 
     end_records = [r for r in records if r.get("event_type") == "session_end"]
     assert len(end_records) == 1

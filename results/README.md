@@ -5,7 +5,7 @@
 - **v1:** Literal normalized substring matching. Retired because human-readable dates, spacing, and atomic facts produced false negatives.
 - **v2:** Unicode normalization, atomic fact matching, date variants, weekday expansion, and numeric word boundaries. Used for the stored task-success baseline.
 - **v3:** Frozen for the dev analysis at commit `ed1f609`. It keeps answer correctness separate from tool-use quality and adds tool precision/recall, missing arguments, extra calls, and identical-call redundancy. It accepts case-insensitive whole-word argument expansions such as `Hopper` -> `Grace Hopper`.
-- **v4:** Dev-only faithfulness analysis layered on top of v3. It reports the rate of specific-looking claims absent from non-error tool-result evidence. Current offline runs use the audit `result_preview` field, so this is conservative and can over-report unsupported claims when the preview omits valid evidence. No second-model LLM judge has been run yet.
+- **v4:** Dev-only faithfulness analysis layered on top of v3. It reports the rate of specific-looking claims absent from non-error tool-result evidence. Legacy offline runs fall back to audit `result_preview` and are rough signals; new audit rows persist `result_full` for exact evidence checks. No second-model LLM judge has been run yet.
 
 The test split must not be regraded after v3 is frozen. Any later grader experiment belongs on dev artifacts and must receive a new version label.
 
@@ -36,6 +36,7 @@ The test split must not be regraded after v3 is frozen. Any later grader experim
 - **Grader v3 Tool-Use Quality:** 85.7% (36/42)
 - **Grader v3 Extra Calls:** 30 total
 - **Grader v3 Identical Repeats:** 5 total
+- **Grader v4 Legacy Faithfulness Signal:** Mean unsupported-claim rate `0.2650`; case 14 is `0.0`, while case 16 is `0.3155` with approximately 57% heuristic precision after manual labeling because legacy previews omit valid office-hour evidence.
 - **Grader v2 Task Success (excluding pending canary re-runs):** 39 / 42 valid trials (92.9%)
 - **Genuine Agent Failure Mode:** `case_13` (3 trials): 10-step loop when searching for non-existent worker pool code.
 - **Remaining Dev Split Work:** 15 cases (45 trials) pending execution upon daily token reset window.

@@ -137,6 +137,7 @@ class AuditLogger:
             "arguments": arguments,
             "result_size_chars": len(result_text),
             "result_preview": preview,
+            "result_full": result_text,
             "is_error": is_error,
             "tool_latency_ms": round(tool_latency_ms, 2),
             "llm_latency_ms": round(llm_latency_ms, 2),

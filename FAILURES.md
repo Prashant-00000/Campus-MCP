@@ -204,6 +204,6 @@ Cap `retry-after` at 120 seconds. If an endpoint requests a backoff exceeding 2 
 
 **What happened:** In `case_16`, the tool returned Alan Turing's faculty row: `FAC01`, CS, `Professor & Chair`, `aturing@univ.edu`, `Theory of Computation, AI`, and `Mon/Wed 2-4 PM`. The model's answer additionally claimed offices `CS 203` and `3-B12`, collaboration with Electrical Engineering, computational complexity, and several biographical details absent from the tool result. The completeness grader still passed all three trials because the required facts were present.
 
-**Fix:** Added v4's separate unsupported-claim-rate metric and the reusable transcript inspector `scripts/show_case.py`. The current offline metric uses logged result previews and is explicitly conservative; a second-model semantic judge remains a follow-up because the stored logs do not contain full tool results.
+**Fix:** Added v4's separate unsupported-claim-rate metric and the reusable transcript inspector `scripts/show_case.py`. Legacy offline analysis uses logged result previews and is explicitly conservative: case 14 falls to 0.0 after numeric/format normalization, while case 16's seven remaining flags manually label as four invented claims and three preview-truncation artifacts. New audit rows now persist `result_full`; a second-model semantic judge remains a follow-up.
 
 **Lesson:** Required-fact completeness detects omission, not invention. Faithfulness needs an evidence comparison and should be reported independently from task success.
