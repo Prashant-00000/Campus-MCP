@@ -32,6 +32,7 @@ from agent.audit_logger import AuditLogger, check_contamination_guard, AUDIT_DIR
 from data.init_databases import init_college_db, init_company_db, init_github_db
 from eval.stats import wilson_score_interval, format_ci
 from eval.hard_cases import generate_hard_cases
+from eval.hand_cases import generate_hand_cases
 
 DATASET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset.jsonl")
 GRADER_VERSION = "v4"
@@ -80,6 +81,9 @@ class EvalHarness:
                 if split is None or item.get("split") == split or split == "all":
                     cases.append(item)
         for item in generate_hard_cases():
+            if split is None or item.get("split") == split or split == "all":
+                cases.append(item)
+        for item in generate_hand_cases():
             if split is None or item.get("split") == split or split == "all":
                 cases.append(item)
         return cases

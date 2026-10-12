@@ -11,6 +11,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from eval.hard_cases import generate_hard_cases
+from eval.hand_cases import generate_hand_cases
 from eval.stats import format_ci
 
 
@@ -21,6 +22,7 @@ def load_cases():
             case = json.loads(line)
             cases[case["id"]] = case
     cases.update({case["id"]: case for case in generate_hard_cases()})
+    cases.update({case["id"]: case for case in generate_hand_cases()})
     return cases
 
 
