@@ -65,9 +65,11 @@ class ReActAgent:
         self.max_steps = max_steps
         self.temperature = temperature
 
-    def run(self, user_question: str) -> AgentRunResult:
+    def run(self, user_question: str, case_id: Optional[str] = None) -> AgentRunResult:
         """Executes the ReAct loop until final answer is obtained or max_steps reached."""
         start_time = time.time()
+        if self.audit_logger:
+            self.audit_logger.new_session()
         tools = self.client_manager.get_openai_tools()
 
         # Build system prompt with optional hardening
@@ -179,8 +181,15 @@ class ReActAgent:
                         arguments=tool_args,
                         result_text=result_text,
                         is_error=is_error,
-                        latency_ms=call_duration_ms,
-                        defense_triggered=defense_block_reason
+                        tool_latency_ms=call_duration_ms,
+                        llm_latency_ms=llm_resp.llm_latency_ms,
+                        cache_hit=llm_resp.cache_hit,
+                        prompt_tokens=llm_resp.prompt_tokens,
+                        completion_tokens=llm_resp.completion_tokens,
+                        finish_reason=llm_resp.finish_reason,
+                        defense_triggered=defense_block_reason,
+                        question=user_question,
+                        case_id=case_id,
                     )
 
                 tool_records.append(ToolExecutionRecord(
@@ -212,6 +221,18 @@ class ReActAgent:
                 })
 
         total_elapsed = (time.time() - start_time) * 1000
+        stop_reason = "final_answer" if final_answer else f"max_steps_exceeded_{self.max_steps}"
+        if self.audit_logger:
+            self.audit_logger.log_session_end(
+                model=self.llm.model_name,
+                steps_taken=step,
+                final_answer=final_answer or "",
+                stop_reason=stop_reason,
+                total_latency_ms=total_elapsed,
+                question=user_question,
+                case_id=case_id,
+            )
+
         return AgentRunResult(
             question=user_question,
             final_answer=final_answer,

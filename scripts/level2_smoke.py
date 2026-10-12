@@ -73,6 +73,13 @@ def main():
     except Exception:
         pass
 
+    import argparse
+    parser = argparse.ArgumentParser(description="Level 2 Smoke Test")
+    parser.add_argument("--no-cache", action="store_true", help="Disable LLM caching")
+    args, _ = parser.parse_known_args()
+    if args.no_cache:
+        os.environ["LLM_CACHE"] = "0"
+
     print("Initializing databases...")
     init_college_db()
     init_company_db()
@@ -99,12 +106,13 @@ def main():
     print(f"\n{'='*70}")
     print(f"LEVEL 2 SMOKE TEST: {llm.provider}/{llm.model_name}")
     print(f"Audit log: {audit_path}")
+    print(f"Cache enabled: {llm.enable_cache}")
     print(f"{'='*70}\n")
 
     results = []
     for q in EASY_QUESTIONS:
         print(f"--- {q['id']}: {q['question'][:60]}...")
-        res = agent.run(q["question"])
+        res = agent.run(q["question"], case_id=q["id"])
 
         tools_called = [tc.tool_name for tc in res.tool_calls]
         answer_lower = (

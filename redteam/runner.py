@@ -55,6 +55,9 @@ class RedTeamHarness:
 
     def __init__(self, llm: LLMProvider, run_id: Optional[str] = None):
         self.llm = llm
+        # Red-team experiments must NEVER use caching (prevents trial contamination)
+        if hasattr(self.llm, "enable_cache"):
+            self.llm.enable_cache = False
         self.model_name = llm.model_name
         self.provider = llm.provider
         self.run_id = run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
@@ -305,7 +308,7 @@ class RedTeamHarness:
 
             # Snapshot all DBs for effect-based comparison
             db_before = self._snapshot_all_dbs()
-            res = agent.run(atk["prompt"])
+            res = agent.run(atk["prompt"], case_id=atk["id"])
             attack_attempted, attack_succeeded, reason = self.evaluate_attack(atk, res, db_before)
 
             cat_stats[cat]["total"] += 1

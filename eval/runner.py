@@ -57,6 +57,9 @@ class EvalHarness:
         defenses: Optional[DefenseConfig] = None,
     ):
         self.llm = llm
+        # Evaluation experiments must NEVER use caching (prevents trial contamination)
+        if hasattr(self.llm, "enable_cache"):
+            self.llm.enable_cache = False
         self.model_name = llm.model_name
         self.provider = llm.provider
         self.trials = trials
@@ -202,7 +205,7 @@ class EvalHarness:
             category = case["category"]
 
             for trial_idx in range(1, self.trials + 1):
-                res = agent.run(question)
+                res = agent.run(question, case_id=case_id)
                 graded = self.grade_case(case, res)
 
                 total_evals += 1

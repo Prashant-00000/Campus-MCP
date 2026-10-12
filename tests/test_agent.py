@@ -39,14 +39,20 @@ def test_react_agent_single_tool(tmp_path):
     assert result.tool_calls[0].tool_name == "get_department"
     assert "Alan Turing" in result.final_answer
 
-    # Verify audit log recorded the call in temp file
+    # Verify audit log recorded the call and session end in temp file
     assert os.path.exists(audit_path)
     with open(audit_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    assert len(lines) >= 1
-    last_log = json.loads(lines[-1])
-    assert last_log["tool_name"] == "get_department"
-    assert last_log["model"] == "model-a-simulator"
+        records = [json.loads(line) for line in f if line.strip()]
+    tool_records = [r for r in records if "tool_name" in r]
+    assert len(tool_records) == 1
+    assert tool_records[0]["tool_name"] == "get_department"
+    assert tool_records[0]["model"] == "model-a-simulator"
+    assert "tool_latency_ms" in tool_records[0]
+    assert "result_preview" in tool_records[0]
+
+    end_records = [r for r in records if r.get("event_type") == "session_end"]
+    assert len(end_records) == 1
+    assert end_records[0]["stop_reason"] == "final_answer"
 
 
 def test_react_agent_multi_tool():

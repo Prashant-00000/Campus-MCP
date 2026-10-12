@@ -61,17 +61,28 @@ class LLMResponse:
         model: str = "",
         provider: str = "",
         timestamp: float = 0.0,
+        llm_latency_ms: float = 0.0,
+        cache_hit: bool = False,
+        prompt_tokens: Optional[int] = None,
+        completion_tokens: Optional[int] = None,
+        finish_reason: Optional[str] = None,
     ):
         self.content = content
         self.tool_calls = tool_calls or []
         self.model = model
         self.provider = provider
         self.timestamp = timestamp or time.time()
+        self.llm_latency_ms = llm_latency_ms
+        self.cache_hit = cache_hit
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.finish_reason = finish_reason
 
     def __repr__(self) -> str:
         return (
             f"LLMResponse(model={self.model!r}, provider={self.provider!r}, "
-            f"tool_calls={len(self.tool_calls)}, content_len={len(self.content or '')})"
+            f"tool_calls={len(self.tool_calls)}, content_len={len(self.content or '')}, "
+            f"latency_ms={self.llm_latency_ms}, cache_hit={self.cache_hit})"
         )
 
 
@@ -150,7 +161,13 @@ class LLMProvider:
     ):
         self.model_name = model_name
         self.provider = provider.lower()
-        self.enable_cache = enable_cache
+        # Check LLM_CACHE env var: "0", "false", "no", "off" disables caching
+        env_cache = os.getenv("LLM_CACHE", "").strip().lower()
+        if env_cache in ("0", "false", "no", "off"):
+            self.enable_cache = False
+        else:
+            self.enable_cache = enable_cache
+
         self.max_retries = max_retries
         self.timeout_s = timeout_s
 
@@ -253,6 +270,11 @@ class LLMProvider:
                 model=self.model_name,
                 provider=self.provider,
                 timestamp=entry.get("timestamp", 0.0),
+                llm_latency_ms=0.0,
+                cache_hit=True,
+                prompt_tokens=entry.get("prompt_tokens"),
+                completion_tokens=entry.get("completion_tokens"),
+                finish_reason=entry.get("finish_reason"),
             )
 
         response = self._call_live_api(messages, tools, temperature)
@@ -262,6 +284,9 @@ class LLMProvider:
                 "content": response.content,
                 "tool_calls": response.tool_calls,
                 "timestamp": response.timestamp,
+                "prompt_tokens": response.prompt_tokens,
+                "completion_tokens": response.completion_tokens,
+                "finish_reason": response.finish_reason,
             }
             self._save_cache()
 
@@ -296,12 +321,19 @@ class LLMProvider:
 
         for attempt in range(self.max_retries):
             try:
+                t0 = time.time()
                 with httpx.Client(timeout=self.timeout_s) as client:
                     resp = client.post(url, headers=headers, json=payload)
                     resp.raise_for_status()
                     data = resp.json()
+                call_latency_ms = (time.time() - t0) * 1000
 
-                choice = data["choices"][0]["message"]
+                choice_obj = data.get("choices", [{}])[0]
+                choice = choice_obj.get("message", {})
+                finish_reason = choice_obj.get("finish_reason")
+                usage = data.get("usage", {})
+                prompt_tokens = usage.get("prompt_tokens")
+                completion_tokens = usage.get("completion_tokens")
                 ts = time.time()
 
                 tool_calls: List[Dict[str, Any]] = []
@@ -310,10 +342,6 @@ class LLMProvider:
                     try:
                         parsed_args = json.loads(raw_args)
                     except (json.JSONDecodeError, TypeError) as parse_err:
-                        # Real models occasionally emit truncated or invalid JSON.
-                        # This is a distinct, trackable failure category:
-                        # "malformed_tool_call". Do NOT silently coerce — raise
-                        # so the caller can log and count it.
                         raise MalformedToolCallError(
                             f"Model '{self.model_name}' returned a tool call for "
                             f"'{tc['function']['name']}' with non-JSON arguments.\n"
@@ -335,6 +363,11 @@ class LLMProvider:
                     model=self.model_name,
                     provider=self.provider,
                     timestamp=ts,
+                    llm_latency_ms=round(call_latency_ms, 2),
+                    cache_hit=False,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    finish_reason=finish_reason,
                 )
 
             except MalformedToolCallError:

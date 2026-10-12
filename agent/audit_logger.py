@@ -97,6 +97,11 @@ class AuditLogger:
 
         self.session_id = f"sess_{int(time.time() * 1000)}"
 
+    def new_session(self) -> str:
+        """Starts a fresh session ID for a new question/run."""
+        self.session_id = f"sess_{int(time.time() * 1000)}"
+        return self.session_id
+
     def log_tool_call(
         self,
         step: int,
@@ -105,21 +110,67 @@ class AuditLogger:
         arguments: Dict[str, Any],
         result_text: str,
         is_error: bool,
-        latency_ms: float,
-        defense_triggered: Optional[str] = None
+        tool_latency_ms: float = 0.0,
+        llm_latency_ms: float = 0.0,
+        cache_hit: bool = False,
+        prompt_tokens: Optional[int] = None,
+        completion_tokens: Optional[int] = None,
+        finish_reason: Optional[str] = None,
+        defense_triggered: Optional[str] = None,
+        question: Optional[str] = None,
+        case_id: Optional[str] = None,
+        latency_ms: Optional[float] = None,
     ):
         """Appends a structured tool invocation record to the audit log."""
+        if latency_ms is not None and tool_latency_ms == 0.0:
+            tool_latency_ms = latency_ms
+
+        preview = result_text[:200] if len(result_text) > 200 else result_text
         record = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "session_id": self.session_id,
             "step": step,
             "model": model,
+            "case_id": case_id,
+            "question": question,
             "tool_name": tool_name,
             "arguments": arguments,
             "result_size_chars": len(result_text),
+            "result_preview": preview,
             "is_error": is_error,
-            "latency_ms": round(latency_ms, 2),
-            "defense_triggered": defense_triggered
+            "tool_latency_ms": round(tool_latency_ms, 2),
+            "llm_latency_ms": round(llm_latency_ms, 2),
+            "cache_hit": cache_hit,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "finish_reason": finish_reason,
+            "defense_triggered": defense_triggered,
+        }
+        with open(self.log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+
+    def log_session_end(
+        self,
+        model: str,
+        steps_taken: int,
+        final_answer: str,
+        stop_reason: str,
+        total_latency_ms: float,
+        question: Optional[str] = None,
+        case_id: Optional[str] = None,
+    ):
+        """Appends a session-end record documenting final outcome and stop reason."""
+        record = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "session_id": self.session_id,
+            "event_type": "session_end",
+            "model": model,
+            "case_id": case_id,
+            "question": question,
+            "steps_taken": steps_taken,
+            "final_answer": final_answer,
+            "stop_reason": stop_reason,
+            "total_latency_ms": round(total_latency_ms, 2),
         }
         with open(self.log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
