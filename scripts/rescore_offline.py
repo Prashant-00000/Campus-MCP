@@ -13,8 +13,11 @@ import sys
 from collections import defaultdict
 from tabulate import tabulate
 
+sys.stdout.reconfigure(encoding="utf-8")
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from agent.react_agent import AgentRunResult, ToolExecutionRecord
+from eval.faithfulness import assess_faithfulness
 from eval.runner import EvalHarness
 from eval.scoring import check_facts_present, check_facts_present_v1
 
@@ -107,6 +110,10 @@ def run_rescore():
             completed=end.get("stop_reason") == "final_answer",
         )
         v3 = offline_harness.grade_case(case_def, v3_result)
+        faithfulness = assess_faithfulness(
+            raw_ans,
+            [tool.get("result_preview", "") for tool in session["tools"] if not tool.get("is_error")],
+        )
 
         if success_v1:
             v1_passes += 1
@@ -135,14 +142,16 @@ def run_rescore():
             v3["argument_accuracy"] if v3["argument_accuracy"] is not None else "N/A",
             v3["missing_args"],
             "PASS" if v3["tool_use_quality"] else "FAIL",
+            faithfulness["unsupported_claim_rate"],
+            "; ".join(faithfulness["unsupported_claims"]),
         ])
 
     print("\n" + "=" * 80)
-    print("OFFLINE RESCORING COMPARISON (GRADER V1 vs GRADER V2 vs GRADER V3)")
+    print("OFFLINE RESCORING COMPARISON (GRADER V1/V2/V3 + V4 FAITHFULNESS)")
     print("=" * 80)
     print(tabulate(comparison_table[:25], headers=[
         "Case ID", "Trial", "Category", "Grader v1", "Grader v2", "Failure Type v2", "Change",
-        "Grader v3 Answer", "Precision", "Recall", "Extra", "Redundant", "Arg Acc", "Missing", "Tool Quality"
+        "Grader v3 Answer", "Precision", "Recall", "Extra", "Redundant", "Arg Acc", "Missing", "Tool Quality", "Unsupported Rate", "Unsupported Claims"
     ], tablefmt="github"))
     print(f"... ({len(comparison_table) - 25} more rows) ...")
 
@@ -158,6 +167,7 @@ def run_rescore():
     print(f"Grader v3 Tool-Use Quality: {v3_quality_passes}/{denominator} ({round(v3_quality_passes/denominator*100, 1)}%)")
     print(f"v3 extra calls: {sum(int(row[10]) for row in comparison_table)}")
     print(f"v3 redundant calls: {sum(int(row[11]) for row in comparison_table)}")
+    print(f"v4 mean unsupported-claim rate: {sum(float(row[15]) for row in comparison_table) / denominator:.4f}")
 
     by_case = defaultdict(list)
     for row in comparison_table:
@@ -179,6 +189,7 @@ def run_rescore():
             verdict(4),
             verdict(7),
             verdict(14),
+            f"{sum(float(row[15]) for row in case_rows) / len(case_rows):.4f}",
         ])
 
     print("\n" + "=" * 80)
@@ -186,7 +197,7 @@ def run_rescore():
     print("=" * 80)
     print(tabulate(case_table, headers=[
         "Case", "Tool Precision", "Tool Recall", "Missing Args", "Extra Calls", "Redundant Calls",
-        "v1", "v2", "v3 Answer", "v3 Tool Quality"
+        "v1", "v2", "v3 Answer", "v3 Tool Quality", "v4 Unsupported Rate"
     ], tablefmt="github"))
 
     # Hand-check 10 specific rows
@@ -200,7 +211,7 @@ def run_rescore():
             hand_check.append(comparison_table[idx])
     print(tabulate(hand_check, headers=[
         "Case ID", "Trial", "Category", "Grader v1", "Grader v2", "Failure Type v2", "Change",
-        "Grader v3 Answer", "Precision", "Recall", "Extra", "Redundant", "Arg Acc", "Missing", "Tool Quality"
+        "Grader v3 Answer", "Precision", "Recall", "Extra", "Redundant", "Arg Acc", "Missing", "Tool Quality", "Unsupported Rate", "Unsupported Claims"
     ], tablefmt="github"))
 
 

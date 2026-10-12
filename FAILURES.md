@@ -197,3 +197,13 @@ Cap `retry-after` at 120 seconds. If an endpoint requests a backoff exceeding 2 
 **Fix:** Grader v3 now reports strict tool precision and recall, `extra_calls`, `redundant_calls`, and N/A argument accuracy for unspecified arguments. Missing or mismatched declared arguments fail, while answer correctness is reported separately from tool-use quality. Offline rescoring of the stored 42-trial artifact found v3 answer correctness at 39/42 (matching v2), tool-use quality at 36/42, 30 extra calls, and 5 truly redundant calls. The earlier 33/42 and 30-redundant figures were caused by conflating tool quality with answer correctness and counting repeated tool names rather than identical calls.
 
 **Lesson:** A metric that cannot fail is not evidence of capability. Tool efficiency and argument coverage must be measured independently from final-answer correctness.
+
+## Failure 8: Unsupported Answer Embellishment Hidden by Completeness Grading
+
+**Date:** 2026-10-12
+
+**What happened:** In `case_16`, the tool returned Alan Turing's faculty row: `FAC01`, CS, `Professor & Chair`, `aturing@univ.edu`, `Theory of Computation, AI`, and `Mon/Wed 2-4 PM`. The model's answer additionally claimed offices `CS 203` and `3-B12`, collaboration with Electrical Engineering, computational complexity, and several biographical details absent from the tool result. The completeness grader still passed all three trials because the required facts were present.
+
+**Fix:** Added v4's separate unsupported-claim-rate metric and the reusable transcript inspector `scripts/show_case.py`. The current offline metric uses logged result previews and is explicitly conservative; a second-model semantic judge remains a follow-up because the stored logs do not contain full tool results.
+
+**Lesson:** Required-fact completeness detects omission, not invention. Faithfulness needs an evidence comparison and should be reported independently from task success.

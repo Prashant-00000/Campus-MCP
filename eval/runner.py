@@ -33,7 +33,7 @@ from data.init_databases import init_college_db, init_company_db, init_github_db
 from eval.stats import wilson_score_interval, format_ci
 
 DATASET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset.jsonl")
-GRADER_VERSION = "v3"
+GRADER_VERSION = "v4"
 RESULTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
