@@ -9,6 +9,8 @@
 
 The test split must not be regraded after v3 is frozen. Any later grader experiment belongs on dev artifacts and must receive a new version label.
 
+V4's claim rules were tuned after inspecting dev outputs, so v4 is explicitly a dev analysis and must be finalized before any test-split run. New case assignment is fixed before model evaluation: `SHA-256(case_id)[:8] mod 5`, with bucket `0` assigned to test and all other buckets assigned to dev. The first added cases are `case_53` (test) and `case_54`-`case_56` (dev).
+
 ## Evaluation Harness Boundary & Version History
 
 ### Grader v1 vs Grader v2 vs Grader v3 Comparison

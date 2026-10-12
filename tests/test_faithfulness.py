@@ -32,5 +32,13 @@ def test_faithfulness_normalizes_numbers_underscores_and_weekdays():
     assert result["unsupported_claims"] == []
 
 
+def test_faithfulness_does_not_hide_unrelated_expansions():
+    result = assess_faithfulness(
+        "The department researches Artificial Intelligence.",
+        ["department: CS; research_area: Theory of Computation"],
+    )
+    assert "Artificial Intelligence" in result["unsupported_claims"]
+
+
 def test_claim_extraction_deduplicates_tokens():
     assert set(extract_claim_tokens("Room 401, then room 401; email a@b.co")) == {"401", "a@b.co"}

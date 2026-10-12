@@ -17,6 +17,7 @@ from data.init_databases import (
     init_github_db,
     DATA_DIR,
 )
+from eval.split_assignment import assign_split
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -149,3 +150,10 @@ def test_all_dataset_required_facts_exist_in_databases():
                     f"Dataset ground-truth fact '{fact}' for {cid} ({category}) "
                     f"does not exist anywhere in the databases!"
                 )
+
+
+def test_new_case_splits_are_stable_hash_assignments():
+    assert assign_split("case_53") == "test"
+    assert assign_split("case_54") == "dev"
+    assert assign_split("case_55") == "dev"
+    assert assign_split("case_56") == "dev"
