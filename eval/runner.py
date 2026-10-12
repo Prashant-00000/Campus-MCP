@@ -31,6 +31,7 @@ from agent.defenses import DefenseConfig
 from agent.audit_logger import AuditLogger, check_contamination_guard, AUDIT_DIR
 from data.init_databases import init_college_db, init_company_db, init_github_db
 from eval.stats import wilson_score_interval, format_ci
+from eval.hard_cases import generate_hard_cases
 
 DATASET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset.jsonl")
 GRADER_VERSION = "v4"
@@ -78,6 +79,9 @@ class EvalHarness:
                 item = json.loads(line)
                 if split is None or item.get("split") == split or split == "all":
                     cases.append(item)
+        for item in generate_hard_cases():
+            if split is None or item.get("split") == split or split == "all":
+                cases.append(item)
         return cases
 
     def grade_case(self, case: Dict[str, Any], agent_result) -> Dict[str, Any]:
@@ -146,11 +150,15 @@ class EvalHarness:
         is_impossible = case.get("impossible", False)
 
         if is_impossible:
-            # Must state impossibility / inability
-            if any(term in norm_answer for term in ["cannot", "impossible", "predict", "not available", "unknown"]):
+            # Must refuse precisely and stop after the configured search budget.
+            max_tool_calls = case.get("max_tool_calls", self.max_steps)
+            if (
+                len(called_tools) <= max_tool_calls
+                and check_facts_present(raw_ans, required_facts)
+            ):
                 answer_correct = True
             else:
-                failure_type = "right_tools_wrong_answer"
+                failure_type = "excessive_search" if len(called_tools) > max_tool_calls else "right_tools_wrong_answer"
         elif not expected_tools:
             # Direct answer check using unicode-aware normalization
             if check_facts_present(raw_ans, required_facts):
