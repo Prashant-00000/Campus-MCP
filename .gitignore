@@ -49,6 +49,7 @@ Thumbs.db
 
 # Project generated artifacts & caches
 .cache/
+scratch/
 data/*.db
 audit_logs/*.jsonl
 !audit_logs/.gitkeep

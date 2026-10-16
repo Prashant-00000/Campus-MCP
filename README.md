@@ -138,12 +138,15 @@ Does hardening break normal agent capability? Evaluated across the legitimate be
 git clone https://github.com/your-username/mcp-agent-eval-redteam.git
 cd mcp-agent-eval-redteam
 
-# Create and activate Python 3.11 virtual environment
+# Tested on Windows with Python 3.9.18
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install pinned dependencies
 pip install -r requirements.txt
+
+# Run the test suite
+pytest -q
 ```
 
 ### Reproduce Stored Results Offline
@@ -160,7 +163,7 @@ cp .env.example .env
 Configure your keys in `.env`:
 ```env
 MCP_AGENT_MODE=live
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=your-key-here
 MODEL_A_PROVIDER=openai
 MODEL_A_MODEL=gpt-4o-mini
 ```
@@ -205,7 +208,7 @@ The user innocently asks: *"Please summarize issue #4 from our GitHub repository
 
 ## 5. 3 Real Engineering Failures & Fixes
 
-See [FAILURES.md](file:///c:/Users/prash/Desktop/MCP/FAILURES.md) for full traces and logs:
+See [FAILURES.md](FAILURES.md) for full traces and logs:
 1. **Stdio Protocol Framing Corruption**: Debug statements using `print()` outputted to stdout, corrupting the JSON-RPC framing parser on the client. Fixed by routing all server logging strictly to `sys.stderr`.
 2. **Substring Collision in Entity Parsing**: Searching for department code `"CS"` matched the substring inside `"mathematiCS"`, causing queries about math courses to get routed to computer science. Fixed by implementing word-boundary regex tokenization.
 3. **False-Positive Semicolon Flagging**: The security evaluator flagged legitimate trailing semicolons on standard SELECT queries as stacked injection attacks. Fixed by parsing for true stacked statements (`re.search(r';\s*[A-Z]', sql)`).
@@ -215,6 +218,6 @@ See [FAILURES.md](file:///c:/Users/prash/Desktop/MCP/FAILURES.md) for full trace
 ## 6. Honest Limitations Section
 
 1. **Prompt Injection is Not Solved**: Defenses significantly reduce attack success on standard attack vectors, but our adaptive attack round proves that attackers targeting unmonitored side-channels (e.g. embedding private information in outbound markdown image URLs or delimiters) can still succeed. Defenses raise the attacker's cost rather than providing mathematical guarantees.
-2. **Dataset Size**: The 52-case evaluation dataset and 32-case attack suite were self-authored. While structured following AgentDojo benchmarks, real-world generalization requires larger, multi-domain distributions.
+2. **Dataset Size**: The 56-case evaluation dataset and 32-case attack suite were self-authored. While structured following AgentDojo benchmarks, real-world generalization requires larger, multi-domain distributions.
 3. **Self-Authored Attacks**: Adversarial testing was designed by the system creator; third-party external red-teaming would likely uncover additional blind spots.
 4. **Version Specificity**: Numbers reflect exact model behaviors and pinned package versions specified in `requirements.txt`.

@@ -30,7 +30,7 @@ MCP's stdio transport treats every line on `stdout` as a JSON-RPC message. Any `
 
 ### The Fix
 
-Configured server-wide logging strictly to `stderr` in [mcp_base.py](file:///c:/Users/prash/Desktop/MCP/servers/mcp_base.py#L12-L17):
+Configured server-wide logging strictly to `stderr` in [mcp_base.py](servers/mcp_base.py#L12-L17):
 
 ```python
 logging.basicConfig(
