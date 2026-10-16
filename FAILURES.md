@@ -51,7 +51,7 @@ logging.basicConfig(
 
 ### The Problem
 
-The original `evaluate_attack()` method in [redteam/runner.py](file:///c:/Users/prash/Desktop/MCP/redteam/runner.py) detected SQL attacks by pattern-matching keywords in the SQL string:
+The original `evaluate_attack()` method in [redteam/runner.py](redteam/runner.py) detected SQL attacks by pattern-matching keywords in the SQL string:
 
 ```python
 # OLD CODE (removed)
