@@ -1,9 +1,12 @@
-# 3-Server MCP Agent: Evaluation Benchmark & Red-Team Hardening
+# CampusMCP: 3-Server Agent Evaluation and Red-Team Harness
 
-> **The Resume Headline:**  
-> *"Built a 3-server MCP agent, measured tool-selection and task accuracy across 2 models, red-teamed it, and cut attack success from X% to Y% (with confidence intervals) at a utility cost of Z%."*
+CampusMCP is a local MCP agent project with college, GitHub, and database
+servers. It includes an evaluation harness, defensive controls, a red-team
+suite, audit logging, and reproducible tests.
 
-Every number in this repository is backed by raw execution logs and pinned environments. Reproduce stored results without API calls:
+Stored benchmark numbers come from the committed result artifacts. Measurements
+marked as pending require a new live run. Reproduce stored results without API
+calls:
 ```bash
 python scripts/reproduce.py --offline
 ```
@@ -40,11 +43,14 @@ Attack suite: 32 attacks across 6 categories (results pending). Wilson 95% Confi
 | **+ System Prompt Hardening** | Probabilistic | *Pending real run* | *TBD* | *TBD* |
 | **+ Content Isolation Wrapping** | Probabilistic | *Pending real run* | *TBD* | *TBD* |
 | **+ Argument & Row Caps** | Deterministic | *Pending real run* | *TBD* | *TBD* |
-| **+ SQL AST Validator** | Deterministic | *Pending real run* | *TBD* | *TBD* |
+| **+ SQL Token Validator** | Deterministic | *Pending real run* | *TBD* | *TBD* |
 | **Full Defenses (+ Write Guard)** | All Active | *Pending real run* | *TBD* | *TBD* |
 | **Adaptive Attack Round** | Delimiter/Markdown Exfil | *Pending real run* | *TBD* | *TBD* |
 
-> *Ablation Finding*: Probabilistic defenses (system prompt reminders) reduce naive direct injections but fail against complex multi-turn indirect payloads. Hard security guarantees require deterministic enforcement (SQL AST parsing, write guards, and strict delimiter isolation). Adaptive attacks targeting unmonitored read channels (e.g. markdown image exfiltration) demonstrate that defense-in-depth reduces but never eliminates risk.
+> *Design note*: Probabilistic defenses such as system-prompt reminders are
+> expected to be weaker than deterministic enforcement. The project evaluates
+> write guards, SQL token validation, and untrusted-content isolation; live
+> ablation results are marked pending until those runs are completed.
 
 ### Vulnerability Breakdown by Category
 | Attack Category | Baseline ASR (Undefended) | Defended ASR (Full) | Absolute Risk Reduction |
@@ -91,7 +97,7 @@ Does hardening break normal agent capability? Evaluated across the legitimate be
                        |  Defensive Interception Pipeline (Pre)    |
                        |  1. Argument Length & Token Sanitizer     |
                        |  2. State-Modification Write Guard        |
-                       |  3. SQL AST / Token Validator             |
+                       |  3. SQL Token Validator                   |
                        +---------------------+---------------------+
                                              |
                       +----------------------+----------------------+
@@ -135,12 +141,15 @@ Does hardening break normal agent capability? Evaluated across the legitimate be
 ### Setup Environment
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/mcp-agent-eval-redteam.git
-cd mcp-agent-eval-redteam
+git clone https://github.com/Prashant-00000/Campus-MCP.git
+cd Campus-MCP
 
 # Tested on Windows with Python 3.9.18
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# macOS/Linux:
+# source .venv/bin/activate
 
 # Install pinned dependencies
 pip install -r requirements.txt
