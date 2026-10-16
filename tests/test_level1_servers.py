@@ -73,6 +73,11 @@ def test_college_tools_normal_and_bad_inputs():
     res = college_server.handle_request({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "search_courses", "arguments": {}}})
     assert res["result"]["isError"] is False
 
+    # Bad input: oversized query
+    res = college_server.handle_request({"jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": {"name": "search_courses", "arguments": {"query": "x" * 100000}}})
+    assert res["result"]["isError"] is True
+    assert res["result"]["content"][0]["type"] == "text"
+
     # 2. get_department
     # Normal
     res = college_server.handle_request({"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "get_department", "arguments": {"dept_code": "MATH"}}})
@@ -153,6 +158,17 @@ def test_db_tools_normal_and_bad_inputs():
     res = db_server.handle_request({"jsonrpc": "2.0", "id": 26, "method": "tools/call", "params": {"name": "query_db", "arguments": {"sql_query": "DROP TABLE orders"}}})
     assert "Security Error" in res["result"]["content"][0]["text"]
 
+    # Bad: malformed SELECT syntax
+    res = db_server.handle_request({"jsonrpc": "2.0", "id": 32, "method": "tools/call", "params": {"name": "query_db", "arguments": {"sql_query": "SELECT * FROM orders WHERE"}}})
+    assert "Database Query Error" in res["result"]["content"][0]["text"]
+
+    # Output limit: query_db caps results at 50 rows
+    res = db_server.handle_request({"jsonrpc": "2.0", "id": 33, "method": "tools/call", "params": {"name": "query_db", "arguments": {"sql_query": "SELECT a.order_id FROM orders a CROSS JOIN orders b CROSS JOIN orders c"}}})
+    text = res["result"]["content"][0]["text"]
+    rows = json.loads(text.split("\n\n[Notice:", 1)[0])
+    assert len(rows) == 50
+    assert "Results capped at 50 rows" in text
+
     # 2. describe_table
     # Normal
     res = db_server.handle_request({"jsonrpc": "2.0", "id": 27, "method": "tools/call", "params": {"name": "describe_table", "arguments": {"table_name": "orders"}}})
@@ -220,8 +236,12 @@ def test_github_tools_normal_and_bad_inputs():
     assert "issue_number parameter is required" in res["result"]["content"][0]["text"]
 
     # Bad: non-integer issue_number
-    res = college_server.handle_request({"jsonrpc": "2.0", "id": 47, "method": "tools/call", "params": {"name": "get_issue", "arguments": {"issue_number": "not_an_int"}}})
-    assert res is not None
+    res = github_server.handle_request({"jsonrpc": "2.0", "id": 47, "method": "tools/call", "params": {"name": "get_issue", "arguments": {"issue_number": "not_an_int"}}})
+    assert "must be an integer" in res["result"]["content"][0]["text"]
+
+    # Bad: issue is absent from the local repository fixture
+    res = github_server.handle_request({"jsonrpc": "2.0", "id": 55, "method": "tools/call", "params": {"name": "get_issue", "arguments": {"issue_number": 999}}})
+    assert "Issue #999 not found" in res["result"]["content"][0]["text"]
 
     # Bad: negative number
     res = github_server.handle_request({"jsonrpc": "2.0", "id": 48, "method": "tools/call", "params": {"name": "get_issue", "arguments": {"issue_number": -5}}})
